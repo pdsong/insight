@@ -35,3 +35,11 @@ insight-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# SQLite databases
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Documents
+需求/
