@@ -42,4 +42,4 @@ npm-debug.log
 *.sqlite3
 
 # Documents
-需求/
+project.md
