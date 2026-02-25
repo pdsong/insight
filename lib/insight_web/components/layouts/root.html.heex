@@ -1,15 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
-    <.live_title default="Insight" suffix=" · Phoenix Framework">
+    <meta name="description" content="Insight — AI 驱动的 HackerNews 智能阅读器" />
+    <%!-- 引入 Inter 字体，提升排版质感 --%>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <.live_title default="Insight" suffix=" · 智能阅读">
       {assigns[:page_title]}
     </.live_title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
+    <%!-- 主题切换脚本：在页面加载前读取 localStorage 设置主题，避免闪烁 --%>
     <script>
       (() => {
         const setTheme = (theme) => {
@@ -30,7 +36,36 @@
       })();
     </script>
   </head>
-  <body>
+  <body class="font-sans antialiased">
+    <%!-- 顶部导航栏：根据登录状态显示不同菜单 --%>
+    <ul class="menu menu-horizontal w-full relative z-10 flex items-center gap-4 px-4 sm:px-6 lg:px-8 justify-end">
+      <%= if @current_scope do %>
+        <li class="text-sm opacity-70">
+          {@current_scope.user.email}
+        </li>
+        <li>
+          <.link href={~p"/users/settings"} class="text-sm font-medium hover:opacity-80 transition-opacity">
+            设置
+          </.link>
+        </li>
+        <li>
+          <.link href={~p"/users/log-out"} method="delete" class="text-sm font-medium hover:opacity-80 transition-opacity">
+            退出登录
+          </.link>
+        </li>
+      <% else %>
+        <li>
+          <.link href={~p"/users/register"} class="text-sm font-medium hover:opacity-80 transition-opacity">
+            注册
+          </.link>
+        </li>
+        <li>
+          <.link href={~p"/users/log-in"} class="text-sm font-medium hover:opacity-80 transition-opacity">
+            登录
+          </.link>
+        </li>
+      <% end %>
+    </ul>
     {@inner_content}
   </body>
 </html>
