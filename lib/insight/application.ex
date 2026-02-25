@@ -12,6 +12,7 @@ defmodule Insight.Application do
       Insight.Repo,
       {DNSCluster, query: Application.get_env(:insight, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Insight.PubSub},
+      {Oban, Application.fetch_env!(:insight, Oban)},
       # Start a worker by calling: Insight.Worker.start_link(arg)
       # {Insight.Worker, arg},
       # Start to serve requests, typically the last entry

@@ -24,6 +24,11 @@ config :insight,
   ecto_repos: [Insight.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+config :insight, Oban,
+  engine: Oban.Engines.Lite,
+  repo: Insight.Repo,
+  queues: [default: 10]
+
 # Configure the endpoint
 config :insight, InsightWeb.Endpoint,
   url: [host: "localhost"],
