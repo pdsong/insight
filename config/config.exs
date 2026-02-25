@@ -22,7 +22,8 @@ config :insight, :scopes,
 
 config :insight,
   ecto_repos: [Insight.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  start_scraper: true
 
 # Configure the endpoint
 config :insight, InsightWeb.Endpoint,

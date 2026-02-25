@@ -11,12 +11,24 @@ defmodule Insight.Application do
       InsightWeb.Telemetry,
       Insight.Repo,
       {DNSCluster, query: Application.get_env(:insight, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Insight.PubSub},
-      # Start a worker by calling: Insight.Worker.start_link(arg)
-      # {Insight.Worker, arg},
-      # Start to serve requests, typically the last entry
-      InsightWeb.Endpoint
+      {Phoenix.PubSub, name: Insight.PubSub}
     ]
+
+    # 根据配置决定是否开启定时爬网服务
+    scraper_child =
+      if Application.get_env(:insight, :start_scraper, true) do
+        [Insight.Scraper.Worker]
+      else
+        []
+      end
+
+    children =
+      children ++
+        scraper_child ++
+        [
+          # Start to serve requests, typically the last entry
+          InsightWeb.Endpoint
+        ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
