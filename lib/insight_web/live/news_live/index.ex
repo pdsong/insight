@@ -1,0 +1,288 @@
+defmodule InsightWeb.NewsLive.Index do
+  @moduledoc """
+  新闻列表 LiveView。
+
+  首页：展示已爬取的 HN 新闻，支持按标签/来源筛选、搜索和分页。
+  """
+  use InsightWeb, :live_view
+  alias Insight.News
+
+  @per_page 20
+
+  @impl true
+  def mount(_params, _session, socket) do
+    tags = News.list_system_tags()
+
+    socket =
+      socket
+      |> assign(:page_title, "新闻")
+      |> assign(:tags, tags)
+      |> assign(:selected_tag_id, nil)
+      |> assign(:source_type, nil)
+      |> assign(:search, "")
+      |> assign(:page, 1)
+
+    {:ok, socket}
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    page = parse_int(params["page"], 1)
+    tag_id = parse_int(params["tag"], nil)
+    source_type = params["source"]
+    search = params["search"] || ""
+
+    result =
+      News.list_news_paginated(
+        page: page,
+        per_page: @per_page,
+        tag_id: tag_id,
+        source_type: source_type,
+        search: search
+      )
+
+    socket =
+      socket
+      |> assign(:page, page)
+      |> assign(:selected_tag_id, tag_id)
+      |> assign(:source_type, source_type)
+      |> assign(:search, search)
+      |> assign(:news_result, result)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("filter_source", %{"source" => source}, socket) do
+    source = if source == "", do: nil, else: source
+    {:noreply, push_patch(socket, to: build_path(socket, source_type: source, page: 1))}
+  end
+
+  @impl true
+  def handle_event("filter_tag", %{"tag-id" => tag_id}, socket) do
+    tag_id = parse_int(tag_id, nil)
+    # 点击同一标签时取消筛选
+    tag_id = if tag_id == socket.assigns.selected_tag_id, do: nil, else: tag_id
+    {:noreply, push_patch(socket, to: build_path(socket, tag_id: tag_id, page: 1))}
+  end
+
+  @impl true
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply, push_patch(socket, to: build_path(socket, search: search, page: 1))}
+  end
+
+  @impl true
+  def handle_event("goto_page", %{"page" => page}, socket) do
+    {:noreply, push_patch(socket, to: build_path(socket, page: parse_int(page, 1)))}
+  end
+
+  # ============================================================
+  # 渲染
+  # ============================================================
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <%!-- 页面标题和搜索 --%>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">新闻</h1>
+          <p class="text-sm opacity-60 mt-1">
+            共 {@news_result.total} 条
+            <%= if @source_type do %>
+              · {if @source_type == "news", do: "热门", else: "最新"}
+            <% end %>
+          </p>
+        </div>
+        <form phx-submit="search" class="flex gap-2">
+          <input
+            type="text"
+            name="search"
+            value={@search}
+            placeholder="搜索标题..."
+            class="input input-bordered input-sm w-48"
+            phx-debounce="300"
+          />
+          <button type="submit" class="btn btn-sm btn-ghost">
+            <.icon name="hero-magnifying-glass" class="size-4" />
+          </button>
+        </form>
+      </div>
+
+      <%!-- 来源类型切换 --%>
+      <div class="flex items-center gap-2">
+        <button
+          phx-click="filter_source"
+          phx-value-source=""
+          class={"btn btn-sm #{if is_nil(@source_type), do: "btn-primary", else: "btn-ghost"}"}
+        >
+          全部
+        </button>
+        <button
+          phx-click="filter_source"
+          phx-value-source="news"
+          class={"btn btn-sm #{if @source_type == "news", do: "btn-primary", else: "btn-ghost"}"}
+        >
+          🔥 热门
+        </button>
+        <button
+          phx-click="filter_source"
+          phx-value-source="newest"
+          class={"btn btn-sm #{if @source_type == "newest", do: "btn-primary", else: "btn-ghost"}"}
+        >
+          ⚡ 最新
+        </button>
+      </div>
+
+      <%!-- 标签筛选 --%>
+      <div class="flex flex-wrap gap-1.5">
+        <button
+          :for={tag <- @tags}
+          phx-click="filter_tag"
+          phx-value-tag-id={tag.id}
+          class={"badge cursor-pointer transition-all duration-200 hover:scale-105 #{if @selected_tag_id == tag.id, do: "badge-primary", else: "badge-outline opacity-70 hover:opacity-100"}"}
+        >
+          {tag.name}
+        </button>
+      </div>
+
+      <%!-- 新闻列表 --%>
+      <div class="space-y-3">
+        <div
+          :for={item <- @news_result.items}
+          class="card bg-base-200/50 hover:bg-base-200 transition-colors duration-200 cursor-default"
+        >
+          <div class="card-body p-4">
+            <div class="flex items-start gap-3">
+              <%!-- 主内容 --%>
+              <div class="flex-1 min-w-0">
+                <a
+                  href={item.url || "https://news.ycombinator.com/item?id=#{item.up_id}"}
+                  target="_blank"
+                  rel="noopener"
+                  class="font-medium hover:text-primary transition-colors line-clamp-2 text-sm"
+                >
+                  {item.title_zh || item.title}
+                </a>
+
+                <%!-- 原标题（如有中文翻译则显示原文） --%>
+                <p
+                  :if={item.title_zh && item.title_zh != ""}
+                  class="text-xs opacity-40 mt-0.5 line-clamp-1"
+                >
+                  {item.title}
+                </p>
+
+                <%!-- 摘要 --%>
+                <p
+                  :if={item.summary_zh && item.summary_zh != ""}
+                  class="text-xs opacity-60 mt-1.5 line-clamp-2"
+                >
+                  {item.summary_zh}
+                </p>
+
+                <%!-- 元信息 --%>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs opacity-50">
+                  <span :if={item.domain} class="flex items-center gap-1">
+                    <.icon name="hero-globe-alt-mini" class="size-3" />
+                    {item.domain}
+                  </span>
+                  <span :if={item.hn_user} class="flex items-center gap-1">
+                    <.icon name="hero-user-mini" class="size-3" />
+                    {item.hn_user}
+                  </span>
+                  <a
+                    href={"https://news.ycombinator.com/item?id=#{item.up_id}"}
+                    target="_blank"
+                    rel="noopener"
+                    class="flex items-center gap-1 hover:text-primary transition-colors"
+                  >
+                    <.icon name="hero-chat-bubble-left-mini" class="size-3" /> HN
+                  </a>
+                </div>
+
+                <%!-- 标签 --%>
+                <div
+                  :if={item.tags != [] && item.tags != %Ecto.Association.NotLoaded{}}
+                  class="flex flex-wrap gap-1 mt-2"
+                >
+                  <span
+                    :for={tag <- item.tags}
+                    class="badge badge-xs badge-outline opacity-60"
+                  >
+                    {tag.name}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <%!-- 空状态 --%>
+        <div :if={@news_result.items == []} class="text-center py-16 opacity-40">
+          <.icon name="hero-inbox" class="size-12 mx-auto mb-4" />
+          <p class="text-lg">暂无新闻</p>
+          <p class="text-sm mt-1">爬虫尚未抓取数据，请运行 <code>mix insight.crawl</code></p>
+        </div>
+      </div>
+
+      <%!-- 分页 --%>
+      <div :if={@news_result.total_pages > 1} class="flex justify-center gap-2 pt-4">
+        <button
+          :if={@page > 1}
+          phx-click="goto_page"
+          phx-value-page={@page - 1}
+          class="btn btn-sm btn-ghost"
+        >
+          ← 上一页
+        </button>
+        <span class="btn btn-sm btn-disabled">
+          {@page} / {@news_result.total_pages}
+        </span>
+        <button
+          :if={@page < @news_result.total_pages}
+          phx-click="goto_page"
+          phx-value-page={@page + 1}
+          class="btn btn-sm btn-ghost"
+        >
+          下一页 →
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  # ============================================================
+  # 私有函数
+  # ============================================================
+
+  defp build_path(socket, overrides) do
+    params =
+      %{
+        page: Keyword.get(overrides, :page, socket.assigns.page),
+        tag: Keyword.get(overrides, :tag_id, socket.assigns.selected_tag_id),
+        source: Keyword.get(overrides, :source_type, socket.assigns.source_type),
+        search: Keyword.get(overrides, :search, socket.assigns.search)
+      }
+      |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == 1 end)
+      |> Map.new()
+
+    case params do
+      p when p == %{} -> ~p"/"
+      _ -> ~p"/?#{params}"
+    end
+  end
+
+  defp parse_int(nil, default), do: default
+  defp parse_int("", default), do: default
+
+  defp parse_int(str, default) when is_binary(str) do
+    case Integer.parse(str) do
+      {n, _} -> n
+      :error -> default
+    end
+  end
+
+  defp parse_int(n, _default) when is_integer(n), do: n
+end

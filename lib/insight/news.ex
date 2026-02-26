@@ -161,4 +161,104 @@ defmodule Insight.News do
       on_conflict: :nothing
     )
   end
+
+  @doc """
+  分页查询新闻列表，支持按标签和来源类型筛选。
+
+  ## 参数
+  - `opts`: 可选参数
+    - `:page` — 页码（默认 1）
+    - `:per_page` — 每页条数（默认 20）
+    - `:tag_id` — 按标签 ID 筛选
+    - `:source_type` — 按来源类型筛选（"news" 或 "newest"）
+    - `:search` — 按标题搜索
+  """
+  def list_news_paginated(opts \\ []) do
+    page = Keyword.get(opts, :page, 1)
+    per_page = Keyword.get(opts, :per_page, 20)
+    tag_id = Keyword.get(opts, :tag_id)
+    source_type = Keyword.get(opts, :source_type)
+    search = Keyword.get(opts, :search)
+
+    query = from(n in NewsItem, order_by: [desc: n.inserted_at])
+
+    # 按标签筛选（使用子查询避免 join binding 问题）
+    query =
+      if tag_id do
+        tagged_ids = from(nt in "news_tags", where: nt.tag_id == ^tag_id, select: nt.news_item_id)
+        from(n in query, where: n.id in subquery(tagged_ids))
+      else
+        query
+      end
+
+    # 按来源类型筛选（通过最新快照的子查询）
+    query =
+      if source_type do
+        case get_latest_snapshot(source_type) do
+          nil ->
+            from(n in query, where: false)
+
+          snapshot ->
+            snapshot_ids =
+              from(csi in CrawlSnapshotItem,
+                where: csi.crawl_snapshot_id == ^snapshot.id,
+                select: csi.news_item_id
+              )
+
+            from(n in query, where: n.id in subquery(snapshot_ids))
+        end
+      else
+        query
+      end
+
+    # 搜索
+    query =
+      if search && search != "" do
+        search_term = "%#{search}%"
+        from(n in query, where: like(n.title, ^search_term) or like(n.title_zh, ^search_term))
+      else
+        query
+      end
+
+    # 总数
+    total = Repo.aggregate(query, :count, :id)
+
+    # 分页查询
+    items =
+      query
+      |> offset(^((page - 1) * per_page))
+      |> limit(^per_page)
+      |> Repo.all()
+      |> Repo.preload(:tags)
+
+    %{
+      items: items,
+      page: page,
+      per_page: per_page,
+      total: total,
+      total_pages: max(ceil(total / per_page), 1)
+    }
+  end
+
+  @doc "获取新闻条目关联的标签列表"
+  def get_news_tags(%NewsItem{} = news_item) do
+    Tag
+    |> join(:inner, [t], nt in "news_tags", on: nt.tag_id == t.id)
+    |> where([t, nt], nt.news_item_id == ^news_item.id)
+    |> Repo.all()
+  end
+
+  @doc "获取新闻在最新快照中的分数和评论数"
+  def get_news_snapshot_data(news_item_id) do
+    CrawlSnapshotItem
+    |> where([csi], csi.news_item_id == ^news_item_id)
+    |> order_by([csi], desc: csi.id)
+    |> limit(1)
+    |> select([csi], %{
+      score: csi.score_at_crawl,
+      comments_count: csi.comments_count_at_crawl,
+      rank: csi.rank
+    })
+    |> Repo.one()
+  end
 end
