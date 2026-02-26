@@ -63,6 +63,35 @@ defmodule Insight.Interactions do
     |> Repo.all()
   end
 
+  @doc "批量查询用户对一组新闻的交互状态，返回 %{news_item_id => MapSet<action>}"
+  def list_interactions_for_news_ids(user_id, news_item_ids) when is_list(news_item_ids) do
+    if user_id == nil || news_item_ids == [] do
+      %{}
+    else
+      UserInteraction
+      |> where([i], i.user_id == ^user_id and i.news_item_id in ^news_item_ids)
+      |> select([i], {i.news_item_id, i.action})
+      |> Repo.all()
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+      |> Map.new(fn {id, actions} -> {id, MapSet.new(actions)} end)
+    end
+  end
+
+  @doc """
+  切换 like/dislike，确保互斥：
+  - 如果已经 like 再点 like → 取消 like
+  - 如果已经 like 再点 dislike → 取消 like + 添加 dislike
+  """
+  def toggle_like_dislike(user_id, news_item_id, action) when action in ["like", "dislike"] do
+    opposite = if action == "like", do: "dislike", else: "like"
+
+    # 先删除对立的交互
+    delete_interaction(user_id, news_item_id, opposite)
+
+    # 再切换当前交互
+    toggle_interaction(user_id, news_item_id, action)
+  end
+
   @doc "检查新闻是否已读"
   def read?(user_id, news_item_id) do
     get_interaction(user_id, news_item_id, "read") != nil

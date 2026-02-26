@@ -3,9 +3,11 @@ defmodule InsightWeb.NewsLive.Index do
   新闻列表 LiveView。
 
   首页：展示已爬取的 HN 新闻，支持按标签/来源筛选、搜索和分页。
+  已登录用户可对新闻进行 Like/Dislike 操作。
   """
   use InsightWeb, :live_view
   alias Insight.News
+  alias Insight.Interactions
 
   @per_page 20
 
@@ -21,6 +23,7 @@ defmodule InsightWeb.NewsLive.Index do
       |> assign(:source_type, nil)
       |> assign(:search, "")
       |> assign(:page, 1)
+      |> assign(:interactions, %{})
 
     {:ok, socket}
   end
@@ -41,6 +44,11 @@ defmodule InsightWeb.NewsLive.Index do
         search: search
       )
 
+    # 加载当前用户对这些新闻的交互状态
+    user_id = get_user_id(socket)
+    news_ids = Enum.map(result.items, & &1.id)
+    interactions = Interactions.list_interactions_for_news_ids(user_id, news_ids)
+
     socket =
       socket
       |> assign(:page, page)
@@ -48,6 +56,7 @@ defmodule InsightWeb.NewsLive.Index do
       |> assign(:source_type, source_type)
       |> assign(:search, search)
       |> assign(:news_result, result)
+      |> assign(:interactions, interactions)
 
     {:noreply, socket}
   end
@@ -61,7 +70,6 @@ defmodule InsightWeb.NewsLive.Index do
   @impl true
   def handle_event("filter_tag", %{"tag-id" => tag_id}, socket) do
     tag_id = parse_int(tag_id, nil)
-    # 点击同一标签时取消筛选
     tag_id = if tag_id == socket.assigns.selected_tag_id, do: nil, else: tag_id
     {:noreply, push_patch(socket, to: build_path(socket, tag_id: tag_id, page: 1))}
   end
@@ -74,6 +82,31 @@ defmodule InsightWeb.NewsLive.Index do
   @impl true
   def handle_event("goto_page", %{"page" => page}, socket) do
     {:noreply, push_patch(socket, to: build_path(socket, page: parse_int(page, 1)))}
+  end
+
+  @impl true
+  def handle_event("toggle_reaction", %{"news-id" => news_id_str, "action" => action}, socket) do
+    user_id = get_user_id(socket)
+
+    if user_id do
+      news_id = String.to_integer(news_id_str)
+      Interactions.toggle_like_dislike(user_id, news_id, action)
+
+      # 重新加载本条新闻的交互状态
+      updated = Interactions.list_interactions_for_news_ids(user_id, [news_id])
+      interactions = Map.merge(socket.assigns.interactions, updated)
+      # 如果用户取消了所有交互，清理该条目
+      interactions =
+        if Map.has_key?(updated, news_id) do
+          interactions
+        else
+          Map.delete(interactions, news_id)
+        end
+
+      {:noreply, assign(socket, :interactions, interactions)}
+    else
+      {:noreply, put_flash(socket, :info, "请先登录后再操作")}
+    end
   end
 
   # ============================================================
@@ -155,6 +188,28 @@ defmodule InsightWeb.NewsLive.Index do
         >
           <div class="card-body p-4">
             <div class="flex items-start gap-3">
+              <%!-- Like/Dislike 按钮 --%>
+              <div class="flex flex-col items-center gap-1 pt-0.5 shrink-0">
+                <button
+                  phx-click="toggle_reaction"
+                  phx-value-news-id={item.id}
+                  phx-value-action="like"
+                  class={"btn btn-xs btn-circle transition-all duration-200 #{if liked?(item.id, @interactions), do: "btn-success text-success-content scale-110", else: "btn-ghost opacity-50 hover:opacity-100"}"}
+                  title="喜欢"
+                >
+                  <.icon name="hero-hand-thumb-up-mini" class="size-3.5" />
+                </button>
+                <button
+                  phx-click="toggle_reaction"
+                  phx-value-news-id={item.id}
+                  phx-value-action="dislike"
+                  class={"btn btn-xs btn-circle transition-all duration-200 #{if disliked?(item.id, @interactions), do: "btn-error text-error-content scale-110", else: "btn-ghost opacity-50 hover:opacity-100"}"}
+                  title="不喜欢"
+                >
+                  <.icon name="hero-hand-thumb-down-mini" class="size-3.5" />
+                </button>
+              </div>
+
               <%!-- 主内容 --%>
               <div class="flex-1 min-w-0">
                 <a
@@ -166,7 +221,7 @@ defmodule InsightWeb.NewsLive.Index do
                   {item.title_zh || item.title}
                 </a>
 
-                <%!-- 原标题（如有中文翻译则显示原文） --%>
+                <%!-- 原标题 --%>
                 <p
                   :if={item.title_zh && item.title_zh != ""}
                   class="text-xs opacity-40 mt-0.5 line-clamp-1"
@@ -256,6 +311,27 @@ defmodule InsightWeb.NewsLive.Index do
   # ============================================================
   # 私有函数
   # ============================================================
+
+  defp get_user_id(socket) do
+    case socket.assigns[:current_scope] do
+      %{user: %{id: id}} -> id
+      _ -> nil
+    end
+  end
+
+  defp liked?(news_id, interactions) do
+    case Map.get(interactions, news_id) do
+      nil -> false
+      actions -> MapSet.member?(actions, "like")
+    end
+  end
+
+  defp disliked?(news_id, interactions) do
+    case Map.get(interactions, news_id) do
+      nil -> false
+      actions -> MapSet.member?(actions, "dislike")
+    end
+  end
 
   defp build_path(socket, overrides) do
     params =
