@@ -56,6 +56,7 @@ defmodule InsightWeb.Router do
       live "/blocked", BlockedLive.Index, :index
       live "/feeds", FeedLive.Index, :index
       live "/daily-summaries", UserLive.DailySummary, :index
+      live "/radar", UserLive.Radar, :index
     end
 
     post "/users/update-password", UserSessionController, :update_password
