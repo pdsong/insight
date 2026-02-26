@@ -172,6 +172,7 @@ defmodule Insight.News do
     - `:tag_id` — 按标签 ID 筛选
     - `:source_type` — 按来源类型筛选（"news" 或 "newest"）
     - `:search` — 按标题搜索
+    - `:user_id` — 用户 ID（用于过滤屏蔽内容）
   """
   def list_news_paginated(opts \\ []) do
     page = Keyword.get(opts, :page, 1)
@@ -179,6 +180,7 @@ defmodule Insight.News do
     tag_id = Keyword.get(opts, :tag_id)
     source_type = Keyword.get(opts, :source_type)
     search = Keyword.get(opts, :search)
+    user_id = Keyword.get(opts, :user_id)
 
     query = from(n in NewsItem, order_by: [desc: n.inserted_at])
 
@@ -220,6 +222,9 @@ defmodule Insight.News do
         query
       end
 
+    # 屏蔽过滤：按用户的 blocked_items 过滤
+    query = apply_blocking_filters(query, user_id)
+
     # 总数
     total = Repo.aggregate(query, :count, :id)
 
@@ -238,6 +243,68 @@ defmodule Insight.News do
       total: total,
       total_pages: max(ceil(total / per_page), 1)
     }
+  end
+
+  defp apply_blocking_filters(query, nil), do: query
+
+  defp apply_blocking_filters(query, user_id) do
+    alias Insight.Interactions.BlockedItem
+
+    blocked_items =
+      BlockedItem
+      |> where([b], b.user_id == ^user_id)
+      |> Repo.all()
+
+    if blocked_items == [] do
+      query
+    else
+      # 按类型分组
+      blocked_keywords = for %{block_type: "keyword", value: v} <- blocked_items, do: v
+      blocked_domains = for %{block_type: "domain", value: v} <- blocked_items, do: v
+      blocked_tags = for %{block_type: "tag", value: v} <- blocked_items, do: v
+
+      # 域名屏蔽
+      query =
+        if blocked_domains != [] do
+          from(n in query, where: n.domain not in ^blocked_domains)
+        else
+          query
+        end
+
+      # 关键词屏蔽（匹配标题和中文标题）
+      query =
+        Enum.reduce(blocked_keywords, query, fn kw, q ->
+          pattern = "%#{kw}%"
+
+          from(n in q,
+            where:
+              not like(n.title, ^pattern) and
+                (is_nil(n.title_zh) or not like(n.title_zh, ^pattern))
+          )
+        end)
+
+      # 标签屏蔽（排除含有被屏蔽标签名的新闻）
+      query =
+        if blocked_tags != [] do
+          blocked_tag_ids =
+            from(t in Insight.News.Tag,
+              where: t.name in ^blocked_tags,
+              select: t.id
+            )
+
+          blocked_news_ids =
+            from(nt in "news_tags",
+              where: nt.tag_id in subquery(blocked_tag_ids),
+              select: nt.news_item_id
+            )
+
+          from(n in query, where: n.id not in subquery(blocked_news_ids))
+        else
+          query
+        end
+
+      query
+    end
   end
 
   @doc "获取新闻条目关联的标签列表"

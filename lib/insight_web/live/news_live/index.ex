@@ -35,17 +35,19 @@ defmodule InsightWeb.NewsLive.Index do
     source_type = params["source"]
     search = params["search"] || ""
 
+    # 加载当前用户对这些新闻的交互状态
+    user_id = get_user_id(socket)
+
     result =
       News.list_news_paginated(
         page: page,
         per_page: @per_page,
         tag_id: tag_id,
         source_type: source_type,
-        search: search
+        search: search,
+        user_id: user_id
       )
 
-    # 加载当前用户对这些新闻的交互状态
-    user_id = get_user_id(socket)
     news_ids = Enum.map(result.items, & &1.id)
     interactions = Interactions.list_interactions_for_news_ids(user_id, news_ids)
 
