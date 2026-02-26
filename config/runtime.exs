@@ -23,6 +23,14 @@ end
 config :insight, InsightWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# AI 配置 — 通义千问（Qwen）OpenAI 兼容接口
+# 通过环境变量 QWEN_API_KEY 配置，也可在 config/dev.exs 中硬编码（仅限开发）
+config :insight,
+  ai_base_url:
+    System.get_env("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+  ai_model: System.get_env("QWEN_MODEL", "qwen3-max-preview"),
+  ai_api_key: System.get_env("QWEN_API_KEY", "")
+
 if config_env() == :prod do
   database_path =
     System.get_env("DATABASE_PATH") ||
