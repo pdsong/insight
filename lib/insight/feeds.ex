@@ -40,4 +40,81 @@ defmodule Insight.Feeds do
   def change_custom_feed(%CustomFeed{} = feed, attrs \\ %{}) do
     CustomFeed.changeset(feed, attrs)
   end
+
+  @doc """
+  根据自定义阅读流的 rules 查询新闻列表（分页）。
+
+  ## rules 支持的键
+  - `"tags"` — 标签名列表（包含任一标签即匹配）
+  - `"keywords"` — 关键词列表（标题 LIKE 匹配任一关键词即匹配）
+  - `"min_score"` — 最低 HN score（整数）
+
+  ## 参数
+  - `feed` — CustomFeed 结构体
+  - `opts` — 分页选项 `:page`, `:per_page`
+  """
+  def query_feed(%CustomFeed{rules: rules}, opts \\ []) do
+    alias Insight.News.{NewsItem, Tag}
+
+    page = Keyword.get(opts, :page, 1)
+    per_page = Keyword.get(opts, :per_page, 20)
+
+    query = from(n in NewsItem, order_by: [desc: n.inserted_at])
+
+    # 标签规则：包含任一指定标签
+    tags = Map.get(rules, "tags", [])
+
+    query =
+      if tags != [] do
+        matching_tag_ids =
+          from(t in Tag,
+            where: t.name in ^tags,
+            select: t.id
+          )
+
+        matching_news_ids =
+          from(nt in "news_tags",
+            where: nt.tag_id in subquery(matching_tag_ids),
+            select: nt.news_item_id
+          )
+
+        from(n in query, where: n.id in subquery(matching_news_ids))
+      else
+        query
+      end
+
+    # 关键词规则：标题包含任一关键词
+    keywords = Map.get(rules, "keywords", [])
+
+    query =
+      if keywords != [] do
+        Enum.reduce(keywords, nil, fn kw, acc ->
+          pattern = "%#{kw}%"
+          condition = dynamic([n], like(n.title, ^pattern) or like(n.title_zh, ^pattern))
+          if acc, do: dynamic([n], ^acc or ^condition), else: condition
+        end)
+        |> then(fn conditions ->
+          if conditions, do: from(n in query, where: ^conditions), else: query
+        end)
+      else
+        query
+      end
+
+    total = Insight.Repo.aggregate(query, :count, :id)
+
+    items =
+      query
+      |> offset(^((page - 1) * per_page))
+      |> limit(^per_page)
+      |> Insight.Repo.all()
+      |> Insight.Repo.preload(:tags)
+
+    %{
+      items: items,
+      page: page,
+      per_page: per_page,
+      total: total,
+      total_pages: max(ceil(total / per_page), 1)
+    }
+  end
 end

@@ -8,12 +8,15 @@ defmodule InsightWeb.NewsLive.Index do
   use InsightWeb, :live_view
   alias Insight.News
   alias Insight.Interactions
+  alias Insight.Feeds
 
   @per_page 20
 
   @impl true
   def mount(_params, _session, socket) do
     tags = News.list_system_tags()
+    user_id = get_user_id(socket)
+    custom_feeds = if user_id, do: Feeds.list_custom_feeds(user_id), else: []
 
     socket =
       socket
@@ -24,6 +27,8 @@ defmodule InsightWeb.NewsLive.Index do
       |> assign(:search, "")
       |> assign(:page, 1)
       |> assign(:interactions, %{})
+      |> assign(:custom_feeds, custom_feeds)
+      |> assign(:active_feed_id, nil)
 
     {:ok, socket}
   end
@@ -34,19 +39,25 @@ defmodule InsightWeb.NewsLive.Index do
     tag_id = parse_int(params["tag"], nil)
     source_type = params["source"]
     search = params["search"] || ""
+    feed_id = parse_int(params["feed"], nil)
 
-    # 加载当前用户对这些新闻的交互状态
     user_id = get_user_id(socket)
 
+    # 如果指定了 feed，使用 feed 查询引擎；否则使用默认查询
     result =
-      News.list_news_paginated(
-        page: page,
-        per_page: @per_page,
-        tag_id: tag_id,
-        source_type: source_type,
-        search: search,
-        user_id: user_id
-      )
+      if feed_id do
+        feed = Feeds.get_custom_feed!(feed_id)
+        Feeds.query_feed(feed, page: page, per_page: @per_page)
+      else
+        News.list_news_paginated(
+          page: page,
+          per_page: @per_page,
+          tag_id: tag_id,
+          source_type: source_type,
+          search: search,
+          user_id: user_id
+        )
+      end
 
     news_ids = Enum.map(result.items, & &1.id)
     interactions = Interactions.list_interactions_for_news_ids(user_id, news_ids)
@@ -59,6 +70,7 @@ defmodule InsightWeb.NewsLive.Index do
       |> assign(:search, search)
       |> assign(:news_result, result)
       |> assign(:interactions, interactions)
+      |> assign(:active_feed_id, feed_id)
 
     {:noreply, socket}
   end
@@ -177,28 +189,50 @@ defmodule InsightWeb.NewsLive.Index do
       </div>
 
       <%!-- 来源类型切换 --%>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
         <button
           phx-click="filter_source"
           phx-value-source=""
-          class={"btn btn-sm #{if is_nil(@source_type), do: "btn-primary", else: "btn-ghost"}"}
+          class={"btn btn-sm #{if is_nil(@source_type) && is_nil(@active_feed_id), do: "btn-primary", else: "btn-ghost"}"}
         >
           全部
         </button>
         <button
           phx-click="filter_source"
           phx-value-source="news"
-          class={"btn btn-sm #{if @source_type == "news", do: "btn-primary", else: "btn-ghost"}"}
+          class={"btn btn-sm #{if @source_type == "news" && is_nil(@active_feed_id), do: "btn-primary", else: "btn-ghost"}"}
         >
           🔥 热门
         </button>
         <button
           phx-click="filter_source"
           phx-value-source="newest"
-          class={"btn btn-sm #{if @source_type == "newest", do: "btn-primary", else: "btn-ghost"}"}
+          class={"btn btn-sm #{if @source_type == "newest" && is_nil(@active_feed_id), do: "btn-primary", else: "btn-ghost"}"}
         >
           ⚡ 最新
         </button>
+
+        <%!-- 分隔线 --%>
+        <div :if={@custom_feeds != []} class="divider divider-horizontal mx-0"></div>
+
+        <%!-- 自定义 Feed Tab --%>
+        <.link
+          :for={feed <- @custom_feeds}
+          patch={~p"/?feed=#{feed.id}"}
+          class={"btn btn-sm #{if @active_feed_id == feed.id, do: "btn-secondary", else: "btn-ghost"}"}
+        >
+          📋 {feed.name}
+        </.link>
+
+        <%!-- 管理入口 --%>
+        <.link
+          :if={get_user_id_from_assigns(@current_scope) != nil}
+          navigate={~p"/feeds"}
+          class="btn btn-sm btn-ghost opacity-50 hover:opacity-100"
+          title="管理阅读流"
+        >
+          <.icon name="hero-cog-6-tooth-mini" class="size-3.5" />
+        </.link>
       </div>
 
       <%!-- 标签筛选 --%>

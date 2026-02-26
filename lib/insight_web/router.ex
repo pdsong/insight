@@ -54,6 +54,7 @@ defmodule InsightWeb.Router do
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
       live "/tags", TagLive.Index, :index
       live "/blocked", BlockedLive.Index, :index
+      live "/feeds", FeedLive.Index, :index
     end
 
     post "/users/update-password", UserSessionController, :update_password
