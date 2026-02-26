@@ -68,21 +68,65 @@ defmodule InsightWeb.NewsLive.Index do
 
     ai_reasons = socket.assigns[:ai_reasons] || %{}
 
-    if top_profiles != [] do
-      profile_tag_names = Enum.map(top_profiles, & &1.tag.name)
+    profile_tag_names = Enum.map(top_profiles, & &1.tag.name)
+    profile_tag_ids = Enum.map(top_profiles, & &1.tag.id)
 
-      # 寻找列表中匹配核心兴趣标签并且还没生成理由的新闻
-      for item <- result.items, is_nil(ai_reasons[item.id]) do
-        item_tag_names = Enum.map(item.tags, & &1.name)
+    # 每天安插的"破圈"文章（只在首页第1页，并且没有特定搜索或过滤时展示）
+    show_serendipity? = user_id && page == 1 && is_nil(tag_id) && search == "" && is_nil(feed_id)
 
-        if Enum.any?(item_tag_names, &(&1 in profile_tag_names)) do
-          # 发起后台任务生成推荐理由
-          Task.async(fn ->
-            case Insight.AI.Recommender.generate_reason(item, top_profiles) do
-              {:ok, reason} -> {:ai_reason, item.id, reason}
-              _ -> {:ai_reason, item.id, nil}
-            end
-          end)
+    serendipity_items =
+      if show_serendipity? do
+        News.fetch_serendipity_news(user_id, profile_tag_ids, news_ids, 2)
+        |> Enum.map(&Map.put(&1, :is_serendipity, true))
+      else
+        []
+      end
+
+    # 将破圈文章随机或定点插入到信息流中 (比如第 3 个和第 7 个位置)
+    stream_items =
+      result.items
+      |> Enum.map(&Map.put(&1, :is_serendipity, false))
+
+    stream_items =
+      case serendipity_items do
+        [s1, s2] ->
+          stream_items
+          |> List.insert_at(min(3, length(stream_items)), s1)
+          |> List.insert_at(min(7, length(stream_items) + 1), s2)
+
+        [s1] ->
+          stream_items
+          |> List.insert_at(min(3, length(stream_items)), s1)
+
+        _ ->
+          stream_items
+      end
+
+    result = %{result | items: stream_items}
+
+    # 处理 AI 生成
+    for item <- result.items, is_nil(ai_reasons[item.id]) do
+      if Map.get(item, :is_serendipity) do
+        # 破圈推荐语
+        Task.async(fn ->
+          case Insight.AI.Recommender.generate_serendipity_reason(item) do
+            {:ok, reason} -> {:ai_reason, item.id, reason}
+            _ -> {:ai_reason, item.id, nil}
+          end
+        end)
+      else
+        # 兴趣画像推荐语
+        if top_profiles != [] do
+          item_tag_names = Enum.map(item.tags, & &1.name)
+
+          if Enum.any?(item_tag_names, &(&1 in profile_tag_names)) do
+            Task.async(fn ->
+              case Insight.AI.Recommender.generate_reason(item, top_profiles) do
+                {:ok, reason} -> {:ai_reason, item.id, reason}
+                _ -> {:ai_reason, item.id, nil}
+              end
+            end)
+          end
         end
       end
     end
@@ -310,9 +354,21 @@ defmodule InsightWeb.NewsLive.Index do
       <div class="space-y-3">
         <div
           :for={item <- @news_result.items}
-          class={"card bg-base-200/50 hover:bg-base-200 transition-colors duration-200 cursor-default #{if read?(item.id, @interactions), do: "opacity-50", else: ""}"}
+          class={"card transition-colors duration-200 cursor-default #{
+            if(Map.get(item, :is_serendipity),
+              do: "bg-gradient-to-r from-purple-100/50 to-pink-100/50 border border-purple-200 hover:from-purple-200/50 hover:to-pink-200/50 shadow-sm",
+              else: "bg-base-200/50 hover:bg-base-200"
+            )
+          } #{if read?(item.id, @interactions), do: "opacity-50", else: ""}"}
         >
-          <div class="card-body p-4">
+          <div class="card-body p-4 relative">
+            <%!-- 破圈标记 --%>
+            <div :if={Map.get(item, :is_serendipity)} class="absolute top-3 right-3">
+              <span class="badge badge-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 shadow-sm">
+                <.icon name="hero-sparkles-mini" class="size-3 mr-1" /> 破圈推荐
+              </span>
+            </div>
+
             <div class="flex items-start gap-3">
               <%!-- Like/Dislike 按钮 --%>
               <div class="flex flex-col items-center gap-1 pt-0.5 shrink-0">

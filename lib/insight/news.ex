@@ -245,6 +245,55 @@ defmodule Insight.News do
     }
   end
 
+  @doc """
+  随机获取指定数量的“破圈”新闻。
+  条件：不在用户的核心兴趣标签中，且有一定的热度/推荐价值（根据 score 排序，或简单的近期的优质文章）。
+  同时排除已经在列表中出现的文章（exclude_news_ids）。
+
+  因为 SQLite 不太支持复杂的 full random，这里我们取最近 200 条数据里不在兴趣标签内的新闻，并从中随机挑选 `limit` 条。
+  """
+  def fetch_serendipity_news(user_id, exclude_tag_ids \\ [], exclude_news_ids \\ [], limit \\ 1) do
+    base_query =
+      from n in NewsItem,
+        order_by: [desc: n.inserted_at],
+        limit: 200
+
+    # 屏蔽已经出现的文章
+    base_query =
+      if exclude_news_ids != [] do
+        from n in base_query, where: n.id not in ^exclude_news_ids
+      else
+        base_query
+      end
+
+    # 屏蔽常规兴趣标签的新闻
+    query =
+      if exclude_tag_ids != [] do
+        tagged_ids =
+          from nt in "news_tags",
+            where: nt.tag_id in ^exclude_tag_ids,
+            select: nt.news_item_id
+
+        from n in base_query, where: n.id not in subquery(tagged_ids)
+      else
+        base_query
+      end
+
+    # 过滤屏蔽内容
+    query = apply_blocking_filters(query, user_id)
+
+    candidates = Repo.all(query) |> Repo.preload(:tags)
+
+    # 从候选集中随机选 取 limit 个
+    if length(candidates) <= limit do
+      candidates
+    else
+      candidates
+      |> Enum.shuffle()
+      |> Enum.take(limit)
+    end
+  end
+
   defp apply_blocking_filters(query, nil), do: query
 
   defp apply_blocking_filters(query, user_id) do

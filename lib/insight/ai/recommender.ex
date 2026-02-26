@@ -61,4 +61,48 @@ defmodule Insight.AI.Recommender do
       end
     end
   end
+
+  @doc """
+  为用户生成一条“破圈（Serendipity）”推荐理由。
+  """
+  def generate_serendipity_reason(news_item) do
+    system_prompt = """
+    你是 Insight 智能新闻推荐助手。
+    这是一篇精选的“破圈”高质量文章（Serendipity），它可能不在用户的常规阅读舒适区内，但非常有价值。
+    你需要为它生成【一句话推荐理由】。
+
+    要求：
+    1. 必须简短，不超过 40 个中文字符。
+    2. 强调“跨界探索”、“新知”、“拓宽视野”或“偶然的惊喜”。
+    3. 语气要像个有品位的朋友，自然、有启发性。
+    4. 格式参考："跳出日常，这篇关于...的文章或许能给你新的灵感。" 或 "偶尔看看不一样的世界，..."
+    5. 只返回推荐理由本身，不要带有任何其他文本。
+    """
+
+    summary_text = Map.get(news_item, :summary_zh, "") || ""
+
+    user_prompt = """
+    【新闻标题】：#{news_item.title_zh || news_item.title}
+    【片段或简介】：#{String.slice(summary_text, 0, 100)}
+
+    请直接生成一句话破圈推荐理由：
+    """
+
+    opts = [
+      temperature: 0.8,
+      max_tokens: 100
+    ]
+
+    case AI.chat(
+           [%{role: "system", content: system_prompt}, %{role: "user", content: user_prompt}],
+           opts
+         ) do
+      {:ok, reason} ->
+        {:ok, String.trim(reason)}
+
+      {:error, err} ->
+        Logger.error("Failed to generate AI serendipity reason: #{inspect(err)}")
+        {:error, err}
+    end
+  end
 end
