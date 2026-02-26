@@ -91,19 +91,50 @@ defmodule InsightWeb.NewsLive.Index do
     if user_id do
       news_id = String.to_integer(news_id_str)
       Interactions.toggle_like_dislike(user_id, news_id, action)
+      {:noreply, refresh_interactions(socket, user_id, [news_id])}
+    else
+      {:noreply, put_flash(socket, :info, "请先登录后再操作")}
+    end
+  end
 
-      # 重新加载本条新闻的交互状态
-      updated = Interactions.list_interactions_for_news_ids(user_id, [news_id])
-      interactions = Map.merge(socket.assigns.interactions, updated)
-      # 如果用户取消了所有交互，清理该条目
-      interactions =
-        if Map.has_key?(updated, news_id) do
-          interactions
-        else
-          Map.delete(interactions, news_id)
-        end
+  @impl true
+  def handle_event("toggle_bookmark", %{"news-id" => news_id_str}, socket) do
+    user_id = get_user_id(socket)
 
-      {:noreply, assign(socket, :interactions, interactions)}
+    if user_id do
+      news_id = String.to_integer(news_id_str)
+      Interactions.toggle_interaction(user_id, news_id, "bookmark")
+      {:noreply, refresh_interactions(socket, user_id, [news_id])}
+    else
+      {:noreply, put_flash(socket, :info, "请先登录后再操作")}
+    end
+  end
+
+  @impl true
+  def handle_event("mark_read", %{"news-id" => news_id_str}, socket) do
+    user_id = get_user_id(socket)
+
+    if user_id do
+      news_id = String.to_integer(news_id_str)
+      # 只添加，不切换
+      unless has_action?(news_id, socket.assigns.interactions, "read") do
+        Interactions.create_interaction(%{user_id: user_id, news_item_id: news_id, action: "read"})
+      end
+
+      {:noreply, refresh_interactions(socket, user_id, [news_id])}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("mark_all_read", _params, socket) do
+    user_id = get_user_id(socket)
+
+    if user_id do
+      news_ids = Enum.map(socket.assigns.news_result.items, & &1.id)
+      Interactions.mark_all_as_read(user_id, news_ids)
+      {:noreply, refresh_interactions(socket, user_id, news_ids)}
     else
       {:noreply, put_flash(socket, :info, "请先登录后再操作")}
     end
@@ -180,11 +211,21 @@ defmodule InsightWeb.NewsLive.Index do
         </button>
       </div>
 
+      <%!-- 一键标记已读 --%>
+      <div
+        :if={get_user_id_from_assigns(@current_scope) && @news_result.items != []}
+        class="flex justify-end"
+      >
+        <button phx-click="mark_all_read" class="btn btn-xs btn-ghost opacity-60 hover:opacity-100">
+          <.icon name="hero-check-circle-mini" class="size-3.5" /> 全部标为已读
+        </button>
+      </div>
+
       <%!-- 新闻列表 --%>
       <div class="space-y-3">
         <div
           :for={item <- @news_result.items}
-          class="card bg-base-200/50 hover:bg-base-200 transition-colors duration-200 cursor-default"
+          class={"card bg-base-200/50 hover:bg-base-200 transition-colors duration-200 cursor-default #{if read?(item.id, @interactions), do: "opacity-50", else: ""}"}
         >
           <div class="card-body p-4">
             <div class="flex items-start gap-3">
@@ -258,16 +299,52 @@ defmodule InsightWeb.NewsLive.Index do
                 </div>
 
                 <%!-- 标签 --%>
-                <div
-                  :if={item.tags != [] && item.tags != %Ecto.Association.NotLoaded{}}
-                  class="flex flex-wrap gap-1 mt-2"
-                >
-                  <span
-                    :for={tag <- item.tags}
-                    class="badge badge-xs badge-outline opacity-60"
+                <%!-- 标签 + 操作 --%>
+                <div class="flex items-center gap-2 mt-2">
+                  <div
+                    :if={item.tags != [] && item.tags != %Ecto.Association.NotLoaded{}}
+                    class="flex flex-wrap gap-1 flex-1"
                   >
-                    {tag.name}
-                  </span>
+                    <span
+                      :for={tag <- item.tags}
+                      class="badge badge-xs badge-outline opacity-60"
+                    >
+                      {tag.name}
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button
+                      phx-click="toggle_bookmark"
+                      phx-value-news-id={item.id}
+                      class={"btn btn-xs btn-ghost transition-all duration-200 #{if bookmarked?(item.id, @interactions), do: "text-warning opacity-100", else: "opacity-40 hover:opacity-80"}"}
+                      title={if bookmarked?(item.id, @interactions), do: "取消收藏", else: "稍后再读"}
+                    >
+                      <.icon
+                        name={
+                          if bookmarked?(item.id, @interactions),
+                            do: "hero-bookmark-solid",
+                            else: "hero-bookmark"
+                        }
+                        class="size-3.5"
+                      />
+                    </button>
+                    <button
+                      :if={!read?(item.id, @interactions)}
+                      phx-click="mark_read"
+                      phx-value-news-id={item.id}
+                      class="btn btn-xs btn-ghost opacity-40 hover:opacity-80"
+                      title="标为已读"
+                    >
+                      <.icon name="hero-eye" class="size-3.5" />
+                    </button>
+                    <span
+                      :if={read?(item.id, @interactions)}
+                      class="text-xs opacity-30"
+                      title="已读"
+                    >
+                      <.icon name="hero-eye-slash" class="size-3.5" />
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -319,18 +396,34 @@ defmodule InsightWeb.NewsLive.Index do
     end
   end
 
-  defp liked?(news_id, interactions) do
+  defp has_action?(news_id, interactions, action) do
     case Map.get(interactions, news_id) do
       nil -> false
-      actions -> MapSet.member?(actions, "like")
+      actions -> MapSet.member?(actions, action)
     end
   end
 
-  defp disliked?(news_id, interactions) do
-    case Map.get(interactions, news_id) do
-      nil -> false
-      actions -> MapSet.member?(actions, "dislike")
-    end
+  defp liked?(news_id, interactions), do: has_action?(news_id, interactions, "like")
+  defp disliked?(news_id, interactions), do: has_action?(news_id, interactions, "dislike")
+  defp bookmarked?(news_id, interactions), do: has_action?(news_id, interactions, "bookmark")
+  defp read?(news_id, interactions), do: has_action?(news_id, interactions, "read")
+
+  defp get_user_id_from_assigns(nil), do: nil
+  defp get_user_id_from_assigns(%{user: %{id: id}}), do: id
+  defp get_user_id_from_assigns(_), do: nil
+
+  defp refresh_interactions(socket, user_id, news_ids) do
+    updated = Interactions.list_interactions_for_news_ids(user_id, news_ids)
+    # Merge updated, but remove entries that now have no interactions
+    interactions =
+      Enum.reduce(news_ids, socket.assigns.interactions, fn id, acc ->
+        case Map.get(updated, id) do
+          nil -> Map.delete(acc, id)
+          set -> Map.put(acc, id, set)
+        end
+      end)
+
+    assign(socket, :interactions, interactions)
   end
 
   defp build_path(socket, overrides) do
