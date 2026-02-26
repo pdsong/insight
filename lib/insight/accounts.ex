@@ -60,6 +60,11 @@ defmodule Insight.Accounts do
   """
   def get_user!(id), do: Repo.get!(User, id)
 
+  @doc "Gets all users."
+  def list_users do
+    Repo.all(User)
+  end
+
   ## User registration
 
   @doc """

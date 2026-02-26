@@ -26,6 +26,7 @@ defmodule Insight.Application do
       children ++
         scraper_child ++
         [
+          Insight.News.DailySummaryWorker,
           # Start to serve requests, typically the last entry
           InsightWeb.Endpoint
         ]

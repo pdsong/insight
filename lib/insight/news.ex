@@ -377,4 +377,36 @@ defmodule Insight.News do
     })
     |> Repo.one()
   end
+
+  alias Insight.News.DailySummary
+
+  @doc "获取用户的每日简报历史（按日期降序）"
+  def list_daily_summaries(user_id) do
+    DailySummary
+    |> where([d], d.user_id == ^user_id)
+    |> order_by([d], desc: d.date)
+    |> Repo.all()
+  end
+
+  @doc "获取用户指定日期的简报"
+  def get_daily_summary(user_id, date) do
+    DailySummary
+    |> where([d], d.user_id == ^user_id and d.date == ^date)
+    |> Repo.one()
+  end
+
+  @doc "创建或更新每日简报"
+  def upsert_daily_summary(attrs) do
+    case get_daily_summary(attrs.user_id, attrs.date) do
+      nil ->
+        %DailySummary{}
+        |> DailySummary.changeset(attrs)
+        |> Repo.insert()
+
+      summary ->
+        summary
+        |> DailySummary.changeset(attrs)
+        |> Repo.update()
+    end
+  end
 end
