@@ -147,18 +147,66 @@ defmodule Insight.Interactions do
     |> Repo.all()
   end
 
-  @doc "更新或创建兴趣画像条目"
-  def upsert_interest_profile(user_id, tag_id, weight) do
-    case Repo.get_by(UserInterestProfile, user_id: user_id, tag_id: tag_id) do
-      nil ->
-        %UserInterestProfile{}
-        |> UserInterestProfile.changeset(%{user_id: user_id, tag_id: tag_id, weight: weight})
-        |> Repo.insert()
+  @doc "重新计算并更新某个用户的所有兴趣画像"
+  def calculate_all_user_interest_profiles(user_id) do
+    # 权重规则
+    weight_map = %{
+      "like" => 2.0,
+      "bookmark" => 1.5,
+      "read" => 1.0,
+      "dislike" => -2.0
+    }
 
-      profile ->
-        profile
-        |> UserInterestProfile.changeset(%{weight: weight})
-        |> Repo.update()
+    # 查询用户的所有交互及对应的新闻标签
+    query =
+      from ui in UserInteraction,
+        join: nt in "news_tags",
+        on: nt.news_item_id == ui.news_item_id,
+        where: ui.user_id == ^user_id,
+        # 可以限制在最近的行为，比如只看最近30天
+        # where: ui.inserted_at >= datetime_add(^DateTime.utc_now(), -30, "day"),
+        select: %{tag_id: nt.tag_id, action: ui.action}
+
+    interactions = Repo.all(query)
+
+    # 聚合每个标签的得分
+    tag_scores =
+      Enum.reduce(interactions, %{}, fn %{tag_id: tag_id, action: action}, acc ->
+        score = Map.get(weight_map, action, 0.0)
+        Map.update(acc, tag_id, score, &(&1 + score))
+      end)
+
+    # 清除旧的负分或零分（可选），这里我们直接全部更新或创建
+    # 并且我们可以加一个阻尼/归一化，比如不要超过 100，不过简单起见直接保存。
+
+    now = DateTime.utc_now(:second)
+
+    entries =
+      Enum.map(tag_scores, fn {tag_id, score} ->
+        # 归一化得分：防止分数无限扩大，可以设置一个简单的阻尼或者上限
+        # 此处使用简单的 clamp (-100 到 100)
+        final_score = max(min(score, 100.0), -100.0)
+
+        %{
+          user_id: user_id,
+          tag_id: tag_id,
+          weight: final_score,
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    # 过滤掉低于 0 的标签（如果不想要负面画像）
+    positive_entries = Enum.filter(entries, &(&1.weight > 0.1))
+
+    # 先删除旧的
+    Repo.delete_all(from p in UserInterestProfile, where: p.user_id == ^user_id)
+
+    # 插入新的
+    if positive_entries != [] do
+      Repo.insert_all(UserInterestProfile, positive_entries)
     end
+
+    :ok
   end
 end

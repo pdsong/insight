@@ -62,6 +62,31 @@ defmodule InsightWeb.NewsLive.Index do
     news_ids = Enum.map(result.items, & &1.id)
     interactions = Interactions.list_interactions_for_news_ids(user_id, news_ids)
 
+    # 动态兴趣画像 & 推荐理由
+    top_profiles =
+      if user_id, do: Interactions.list_user_interest_profiles(user_id) |> Enum.take(3), else: []
+
+    ai_reasons = socket.assigns[:ai_reasons] || %{}
+
+    if top_profiles != [] do
+      profile_tag_names = Enum.map(top_profiles, & &1.tag.name)
+
+      # 寻找列表中匹配核心兴趣标签并且还没生成理由的新闻
+      for item <- result.items, is_nil(ai_reasons[item.id]) do
+        item_tag_names = Enum.map(item.tags, & &1.name)
+
+        if Enum.any?(item_tag_names, &(&1 in profile_tag_names)) do
+          # 发起后台任务生成推荐理由
+          Task.async(fn ->
+            case Insight.AI.Recommender.generate_reason(item, top_profiles) do
+              {:ok, reason} -> {:ai_reason, item.id, reason}
+              _ -> {:ai_reason, item.id, nil}
+            end
+          end)
+        end
+      end
+    end
+
     socket =
       socket
       |> assign(:page, page)
@@ -71,6 +96,7 @@ defmodule InsightWeb.NewsLive.Index do
       |> assign(:news_result, result)
       |> assign(:interactions, interactions)
       |> assign(:active_feed_id, feed_id)
+      |> assign(:ai_reasons, ai_reasons)
 
     {:noreply, socket}
   end
@@ -105,6 +131,10 @@ defmodule InsightWeb.NewsLive.Index do
     if user_id do
       news_id = String.to_integer(news_id_str)
       Interactions.toggle_like_dislike(user_id, news_id, action)
+
+      # 异步更新兴趣画像
+      Task.start(fn -> Interactions.calculate_all_user_interest_profiles(user_id) end)
+
       {:noreply, refresh_interactions(socket, user_id, [news_id])}
     else
       {:noreply, put_flash(socket, :info, "请先登录后再操作")}
@@ -118,6 +148,10 @@ defmodule InsightWeb.NewsLive.Index do
     if user_id do
       news_id = String.to_integer(news_id_str)
       Interactions.toggle_interaction(user_id, news_id, "bookmark")
+
+      # 异步更新兴趣画像
+      Task.start(fn -> Interactions.calculate_all_user_interest_profiles(user_id) end)
+
       {:noreply, refresh_interactions(socket, user_id, [news_id])}
     else
       {:noreply, put_flash(socket, :info, "请先登录后再操作")}
@@ -134,6 +168,9 @@ defmodule InsightWeb.NewsLive.Index do
       unless has_action?(news_id, socket.assigns.interactions, "read") do
         Interactions.create_interaction(%{user_id: user_id, news_item_id: news_id, action: "read"})
       end
+
+      # 异步更新兴趣画像（虽然 read 权重小，但也算隐式交互）
+      Task.start(fn -> Interactions.calculate_all_user_interest_profiles(user_id) end)
 
       {:noreply, refresh_interactions(socket, user_id, [news_id])}
     else
@@ -152,6 +189,18 @@ defmodule InsightWeb.NewsLive.Index do
     else
       {:noreply, put_flash(socket, :info, "请先登录后再操作")}
     end
+  end
+
+  @impl true
+  def handle_info({ref, {:ai_reason, news_id, reason}}, socket) when is_reference(ref) do
+    Process.demonitor(ref, [:flush])
+    ai_reasons = Map.put(socket.assigns.ai_reasons, news_id, reason)
+    {:noreply, assign(socket, :ai_reasons, ai_reasons)}
+  end
+
+  @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
+    {:noreply, socket}
   end
 
   # ============================================================
@@ -313,6 +362,17 @@ defmodule InsightWeb.NewsLive.Index do
                 >
                   {item.summary_zh}
                 </p>
+
+                <%!-- AI 推荐理由 --%>
+                <div
+                  :if={@ai_reasons[item.id]}
+                  class="mt-2.5 p-2 rounded-md bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 flex items-start gap-2"
+                >
+                  <.icon name="hero-sparkles-solid" class="size-4 text-primary shrink-0 mt-0.5" />
+                  <p class="text-xs font-medium text-primary/90 leading-relaxed">
+                    {@ai_reasons[item.id]}
+                  </p>
+                </div>
 
                 <%!-- 元信息 --%>
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs opacity-50">
