@@ -57,24 +57,46 @@ defmodule Insight.Scraper.Worker do
           items_count: length(items)
         })
 
-      # 2. 存入新闻条目并关联快照
-      items
-      |> Enum.with_index(1)
-      |> Enum.each(fn {item, rank} ->
-        # Upsert news item（基于 up_id 去重）
-        {:ok, news_item} = News.upsert_news_item(Map.drop(item, [:score, :comments_count]))
+      # 2. 存入新闻条目并关联快照，同时收集新入库的新闻
+      saved_items =
+        items
+        |> Enum.with_index(1)
+        |> Enum.map(fn {item, rank} ->
+          # Upsert news item（基于 up_id 去重）
+          {:ok, news_item} = News.upsert_news_item(Map.drop(item, [:score, :comments_count]))
 
-        # 存入快照关联表（包含当时的排名、分数和评论数）
-        News.create_crawl_snapshot_item(%{
-          crawl_snapshot_id: snapshot.id,
-          news_item_id: news_item.id,
-          rank: rank,
-          score_at_crawl: item.score,
-          comments_count_at_crawl: item.comments_count
-        })
-      end)
+          # 存入快照关联表（包含当时的排名、分数和评论数）
+          News.create_crawl_snapshot_item(%{
+            crawl_snapshot_id: snapshot.id,
+            news_item_id: news_item.id,
+            rank: rank,
+            score_at_crawl: item.score,
+            comments_count_at_crawl: item.comments_count
+          })
+
+          news_item
+        end)
 
       Logger.info("#{source_type} 爬取及入库完成，共 #{length(items)} 条")
+
+      # 3. AI 自动标签和翻译（如果有 API Key）
+      if Application.get_env(:insight, :ai_api_key, "") != "" do
+        # 自动标签
+        untagged = Enum.filter(saved_items, &(is_nil(&1.keywords) or &1.keywords == ""))
+
+        if untagged != [] do
+          Logger.info("开始 AI 自动标签，#{length(untagged)} 条待处理...")
+          Insight.AI.Tagger.process_news_items(untagged)
+        end
+
+        # 自动翻译和摘要
+        untranslated = Enum.filter(saved_items, &(is_nil(&1.title_zh) or &1.title_zh == ""))
+
+        if untranslated != [] do
+          Logger.info("开始 AI 翻译，#{length(untranslated)} 条待处理...")
+          Insight.AI.Summarizer.process_news_items(untranslated)
+        end
+      end
     end
   end
 end
