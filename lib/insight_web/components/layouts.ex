@@ -35,23 +35,6 @@ defmodule InsightWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <%!-- 应用顶部导航栏 --%>
-    <header class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <span class="text-xl font-bold tracking-tight">Insight</span>
-          <span class="text-xs opacity-50 font-medium">智能阅读</span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
-          <li>
-            <.theme_toggle />
-          </li>
-        </ul>
-      </div>
-    </header>
-
     <main class="px-4 py-20 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-4xl space-y-4">
         {render_slot(@inner_block)}

@@ -98,31 +98,31 @@ defmodule InsightWeb.NewsLive.Index do
 
     result = %{result | items: stream_items}
 
-    # 处理 AI 生成
+    # 处理 AI 生成 (暂时注释掉)
     for item <- result.items, is_nil(ai_reasons[item.id]) do
-      if Map.get(item, :is_serendipity) do
-        # 破圈推荐语
-        Task.async(fn ->
-          case Insight.AI.Recommender.generate_serendipity_reason(item) do
-            {:ok, reason} -> {:ai_reason, item.id, reason}
-            _ -> {:ai_reason, item.id, nil}
-          end
-        end)
-      else
-        # 兴趣画像推荐语
-        if top_profiles != [] do
-          item_tag_names = Enum.map(item.tags, & &1.name)
+      # if Map.get(item, :is_serendipity) do
+      #   # 破圈推荐语
+      #   Task.async(fn ->
+      #     case Insight.AI.Recommender.generate_serendipity_reason(item) do
+      #       {:ok, reason} -> {:ai_reason, item.id, reason}
+      #       _ -> {:ai_reason, item.id, nil}
+      #     end
+      #   end)
+      # else
+      #   # 兴趣画像推荐语
+      #   if top_profiles != [] do
+      #     item_tag_names = Enum.map(item.tags, & &1.name)
 
-          if Enum.any?(item_tag_names, &(&1 in profile_tag_names)) do
-            Task.async(fn ->
-              case Insight.AI.Recommender.generate_reason(item, top_profiles) do
-                {:ok, reason} -> {:ai_reason, item.id, reason}
-                _ -> {:ai_reason, item.id, nil}
-              end
-            end)
-          end
-        end
-      end
+      #     if Enum.any?(item_tag_names, &(&1 in profile_tag_names)) do
+      #       Task.async(fn ->
+      #         case Insight.AI.Recommender.generate_reason(item, top_profiles) do
+      #           {:ok, reason} -> {:ai_reason, item.id, reason}
+      #           _ -> {:ai_reason, item.id, nil}
+      #         end
+      #       end)
+      #     end
+      #   end
+      # end
     end
 
     socket =
