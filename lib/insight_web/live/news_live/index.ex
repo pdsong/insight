@@ -249,45 +249,35 @@ defmodule InsightWeb.NewsLive.Index do
   def render(assigns) do
     ~H"""
     <div class="space-y-6">
-      <%!-- 页面标题和搜索 --%>
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-bold tracking-tight">新闻</h1>
-          <p class="text-sm opacity-60 mt-1">
-            共 {@news_result.total} 条
-            <%= if @source_type do %>
-              · {if @source_type == "news", do: "热门", else: "最新"}
-            <% end %>
-          </p>
-        </div>
-        <form phx-submit="search" class="flex gap-2">
-          <input
-            type="text"
-            name="search"
-            value={@search}
-            placeholder="搜索标题..."
-            class="input input-bordered input-sm w-48"
-            phx-debounce="300"
-          />
-          <button type="submit" class="btn btn-sm btn-ghost">
-            <.icon name="hero-magnifying-glass" class="size-4" />
-          </button>
-        </form>
+      <%!-- 页面标题 --%>
+      <div class="text-center py-6">
+        <h1
+          class="text-5xl font-black tracking-wider bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent drop-shadow-lg select-none"
+          style="font-family: 'Inter', 'Outfit', system-ui, sans-serif; letter-spacing: 0.12em;"
+        >
+          INSIGHT
+        </h1>
+        <p class="text-sm opacity-50 mt-2 tracking-widest font-mono uppercase">
+          HackerNews Intelligence · 共 {@news_result.total} 条
+          <%= if @source_type do %>
+            · {if @source_type == "news", do: "热门", else: "最新"}
+          <% end %>
+        </p>
       </div>
 
       <%!-- 来源类型切换 --%>
-      <div class="flex items-center gap-2 flex-wrap">
+      <div class="flex items-center justify-center gap-3 flex-wrap">
         <button
           phx-click="filter_source"
           phx-value-source="newest"
-          class={"btn btn-sm #{if @source_type == "newest" && is_nil(@active_feed_id), do: "btn-primary", else: "btn-ghost"}"}
+          class={"btn transition-all duration-300 #{if @source_type == "newest" && is_nil(@active_feed_id), do: "btn-primary shadow-lg shadow-primary/30 scale-105", else: "btn-ghost border border-base-300 hover:border-primary/50"}"}
         >
           ⚡ 最新
         </button>
         <button
           phx-click="filter_source"
           phx-value-source="news"
-          class={"btn btn-sm #{if @source_type == "news" && is_nil(@active_feed_id), do: "btn-primary", else: "btn-ghost"}"}
+          class={"btn transition-all duration-300 #{if @source_type == "news" && is_nil(@active_feed_id), do: "btn-primary shadow-lg shadow-primary/30 scale-105", else: "btn-ghost border border-base-300 hover:border-primary/50"}"}
         >
           🔥 热门
         </button>
@@ -299,7 +289,7 @@ defmodule InsightWeb.NewsLive.Index do
         <.link
           :for={feed <- @custom_feeds}
           patch={~p"/?feed=#{feed.id}"}
-          class={"btn btn-sm #{if @active_feed_id == feed.id, do: "btn-secondary", else: "btn-ghost"}"}
+          class={"btn #{if @active_feed_id == feed.id, do: "btn-secondary shadow-lg shadow-secondary/30", else: "btn-ghost border border-base-300"}"}
         >
           📋 {feed.name}
         </.link>
@@ -308,20 +298,37 @@ defmodule InsightWeb.NewsLive.Index do
         <.link
           :if={get_user_id_from_assigns(@current_scope) != nil}
           navigate={~p"/feeds"}
-          class="btn btn-sm btn-ghost opacity-50 hover:opacity-100"
+          class="btn btn-ghost btn-circle opacity-40 hover:opacity-100"
           title="管理阅读流"
         >
-          <.icon name="hero-cog-6-tooth-mini" class="size-3.5" />
+          <.icon name="hero-cog-6-tooth-mini" class="size-4" />
         </.link>
       </div>
 
+      <%!-- 搜索框 --%>
+      <div class="flex justify-center mt-4">
+        <form phx-submit="search" class="join w-full max-w-md">
+          <input
+            type="text"
+            name="search"
+            value={@search}
+            placeholder="搜索标题 / Search titles..."
+            class="input input-bordered join-item w-full focus:border-primary/50 focus:shadow-lg focus:shadow-primary/10 transition-all"
+            phx-debounce="300"
+          />
+          <button type="submit" class="btn btn-primary join-item">
+            <.icon name="hero-magnifying-glass" class="size-5" />
+          </button>
+        </form>
+      </div>
+
       <%!-- 标签筛选 --%>
-      <div class="flex flex-wrap gap-1.5">
+      <div class="flex flex-wrap gap-2 justify-center mt-4">
         <button
           :for={tag <- @tags}
           phx-click="filter_tag"
           phx-value-tag-id={tag.id}
-          class={"badge cursor-pointer transition-all duration-200 hover:scale-105 #{if @selected_tag_id == tag.id, do: "badge-primary", else: "badge-outline opacity-70 hover:opacity-100"}"}
+          class={"badge badge-lg cursor-pointer transition-all duration-200 hover:scale-105 font-medium #{if @selected_tag_id == tag.id, do: "badge-primary shadow-md shadow-primary/20", else: "badge-outline opacity-60 hover:opacity-100 hover:border-primary/40"}"}
         >
           {tag.name}
         </button>
@@ -346,7 +353,7 @@ defmodule InsightWeb.NewsLive.Index do
           }
           class={"card border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 #{
             if(Map.get(item, :is_serendipity),
-              do: "bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200",
+              do: "bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 border-purple-500/50 shadow-purple-500/20 shadow-md text-gray-100",
               else: "bg-base-100 border-base-300"
             )
           } #{if read?(item.id, @interactions), do: "opacity-50", else: ""}"}
@@ -357,9 +364,9 @@ defmodule InsightWeb.NewsLive.Index do
               <span class="badge badge-sm badge-primary font-mono font-bold">{idx}</span>
               <span
                 :if={Map.get(item, :is_serendipity)}
-                class="badge badge-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0"
+                class="badge badge-xs border border-cyan-400/60 bg-cyan-950/60 text-cyan-300 font-semibold"
               >
-                ✨ 破圈
+                ⚡ 破圈
               </span>
             </div>
 
