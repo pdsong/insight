@@ -91,6 +91,32 @@ defmodule Insight.News do
     end
   end
 
+  @doc """
+  获取最近一次快照中的新闻条目列表，返回 LiveView 兼容的结果（含 tags preload）。
+
+  返回格式:
+  %{items: [%NewsItem{} ...], total: integer, page: 1, per_page: total, total_pages: 1}
+  """
+  def list_snapshot_news(source_type) do
+    case get_latest_snapshot(source_type) do
+      nil ->
+        %{items: [], total: 0, page: 1, per_page: 0, total_pages: 1}
+
+      snapshot ->
+        items =
+          CrawlSnapshotItem
+          |> where([csi], csi.crawl_snapshot_id == ^snapshot.id)
+          |> join(:inner, [csi], n in NewsItem, on: csi.news_item_id == n.id)
+          |> order_by([csi], asc: csi.rank)
+          |> select([csi, n], n)
+          |> Repo.all()
+          |> Repo.preload(:tags)
+
+        total = length(items)
+        %{items: items, total: total, page: 1, per_page: total, total_pages: 1}
+    end
+  end
+
   @doc "为快照添加新闻关联条目"
   def create_crawl_snapshot_item(attrs) do
     %CrawlSnapshotItem{}

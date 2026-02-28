@@ -37,26 +37,20 @@ defmodule InsightWeb.NewsLive.Index do
   def handle_params(params, _uri, socket) do
     page = parse_int(params["page"], 1)
     tag_id = parse_int(params["tag"], nil)
-    source_type = params["source"]
+    # 默认为 "newest"，不再有 "全部" 选项
+    source_type = params["source"] || "newest"
     search = params["search"] || ""
     feed_id = parse_int(params["feed"], nil)
 
     user_id = get_user_id(socket)
 
-    # 如果指定了 feed，使用 feed 查询引擎；否则使用默认查询
+    # 如果指定了 feed，使用 feed 查询引擎；否则使用快照查询（按 crawl rank 排序）
     result =
       if feed_id do
         feed = Feeds.get_custom_feed!(feed_id)
         Feeds.query_feed(feed, page: page, per_page: @per_page)
       else
-        News.list_news_paginated(
-          page: page,
-          per_page: @per_page,
-          tag_id: tag_id,
-          source_type: source_type,
-          search: search,
-          user_id: user_id
-        )
+        News.list_snapshot_news(source_type)
       end
 
     news_ids = Enum.map(result.items, & &1.id)
@@ -147,7 +141,7 @@ defmodule InsightWeb.NewsLive.Index do
 
   @impl true
   def handle_event("filter_source", %{"source" => source}, socket) do
-    source = if source == "", do: nil, else: source
+    source = if source == "", do: "newest", else: source
     {:noreply, push_patch(socket, to: build_path(socket, source_type: source, page: 1))}
   end
 
@@ -285,10 +279,10 @@ defmodule InsightWeb.NewsLive.Index do
       <div class="flex items-center gap-2 flex-wrap">
         <button
           phx-click="filter_source"
-          phx-value-source=""
-          class={"btn btn-sm #{if is_nil(@source_type) && is_nil(@active_feed_id), do: "btn-primary", else: "btn-ghost"}"}
+          phx-value-source="newest"
+          class={"btn btn-sm #{if @source_type == "newest" && is_nil(@active_feed_id), do: "btn-primary", else: "btn-ghost"}"}
         >
-          全部
+          ⚡ 最新
         </button>
         <button
           phx-click="filter_source"
@@ -296,13 +290,6 @@ defmodule InsightWeb.NewsLive.Index do
           class={"btn btn-sm #{if @source_type == "news" && is_nil(@active_feed_id), do: "btn-primary", else: "btn-ghost"}"}
         >
           🔥 热门
-        </button>
-        <button
-          phx-click="filter_source"
-          phx-value-source="newest"
-          class={"btn btn-sm #{if @source_type == "newest" && is_nil(@active_feed_id), do: "btn-primary", else: "btn-ghost"}"}
-        >
-          ⚡ 最新
         </button>
 
         <%!-- 分隔线 --%>

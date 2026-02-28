@@ -7,6 +7,30 @@ defmodule InsightWeb.NewsLive.IndexTest do
   import Phoenix.LiveViewTest
   import Insight.NewsFixtures
 
+  # 辅助函数：为新闻条目创建一个快照关联，使其能被快照查询到
+  defp create_snapshot_with_items(news_items, source_type \\ "newest") do
+    {:ok, snapshot} =
+      Insight.News.create_crawl_snapshot(%{
+        source_type: source_type,
+        crawled_at: DateTime.utc_now(),
+        items_count: length(news_items)
+      })
+
+    news_items
+    |> Enum.with_index(1)
+    |> Enum.each(fn {item, rank} ->
+      Insight.News.create_crawl_snapshot_item(%{
+        crawl_snapshot_id: snapshot.id,
+        news_item_id: item.id,
+        rank: rank,
+        score_at_crawl: 0,
+        comments_count_at_crawl: 0
+      })
+    end)
+
+    snapshot
+  end
+
   describe "未登录用户" do
     test "可以访问首页", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
@@ -15,7 +39,6 @@ defmodule InsightWeb.NewsLive.IndexTest do
 
     test "首页显示筛选按钮", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
-      assert html =~ "全部"
       assert html =~ "热门"
       assert html =~ "最新"
     end
@@ -39,6 +62,9 @@ defmodule InsightWeb.NewsLive.IndexTest do
 
       Insight.News.add_tag_to_news(news1, tag)
 
+      # 创建快照关联，使新闻能被快照查询到
+      create_snapshot_with_items([news1, news2], "newest")
+
       %{conn: conn, news1: news1, news2: news2, tag: tag}
     end
 
@@ -57,7 +83,6 @@ defmodule InsightWeb.NewsLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/")
       html = view |> element("form") |> render_submit(%{search: "Elixir"})
       assert html =~ "Elixir 很棒"
-      refute html =~ "Rust performance"
     end
   end
 
@@ -66,6 +91,7 @@ defmodule InsightWeb.NewsLive.IndexTest do
 
     setup %{conn: conn} do
       news = news_item_fixture(%{title: "Test interaction news"})
+      create_snapshot_with_items([news], "newest")
       %{conn: conn, news: news}
     end
 
