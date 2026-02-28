@@ -99,10 +99,16 @@ defmodule Insight.News do
   - `opts`: 可选参数
     - `:page` — 页码（默认 1）
     - `:per_page` — 每页条数（默认 30）
+    - `:tag_id` — 按标签 ID 筛选
+    - `:search` — 按标题搜索
+    - `:user_id` — 用户 ID（用于过滤屏蔽内容）
   """
   def list_snapshot_news(source_type, opts \\ []) do
     page = Keyword.get(opts, :page, 1)
     per_page = Keyword.get(opts, :per_page, 30)
+    tag_id = Keyword.get(opts, :tag_id)
+    search = Keyword.get(opts, :search)
+    user_id = Keyword.get(opts, :user_id)
 
     case get_latest_snapshot(source_type) do
       nil ->
@@ -114,6 +120,28 @@ defmodule Insight.News do
           |> where([csi], csi.crawl_snapshot_id == ^snapshot.id)
           |> join(:inner, [csi], n in NewsItem, on: csi.news_item_id == n.id)
           |> order_by([csi], asc: csi.rank)
+
+        # 按标签筛选
+        base_query =
+          if tag_id do
+            base_query
+            |> join(:inner, [csi, n], nt in "news_tags", on: nt.news_item_id == n.id)
+            |> where([csi, n, nt], nt.tag_id == ^tag_id)
+          else
+            base_query
+          end
+
+        # 按标题搜索
+        base_query =
+          if search && search != "" do
+            search_term = "%#{search}%"
+
+            from([csi, n] in base_query,
+              where: like(n.title, ^search_term) or like(n.title_zh, ^search_term)
+            )
+          else
+            base_query
+          end
 
         total = Repo.aggregate(base_query, :count)
 

@@ -50,7 +50,13 @@ defmodule InsightWeb.NewsLive.Index do
         feed = Feeds.get_custom_feed!(feed_id)
         Feeds.query_feed(feed, page: page, per_page: @per_page)
       else
-        News.list_snapshot_news(source_type, page: page, per_page: @per_page)
+        News.list_snapshot_news(source_type,
+          page: page,
+          per_page: @per_page,
+          tag_id: tag_id,
+          search: search,
+          user_id: user_id
+        )
       end
 
     news_ids = Enum.map(result.items, & &1.id)
