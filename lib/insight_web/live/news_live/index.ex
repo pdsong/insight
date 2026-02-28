@@ -362,12 +362,15 @@ defmodule InsightWeb.NewsLive.Index do
             <%!-- 序号 + 破圈标记 --%>
             <div class="flex items-center justify-between">
               <span class="badge badge-sm badge-primary font-mono font-bold">{idx}</span>
-              <span
+              <div
                 :if={Map.get(item, :is_serendipity)}
-                class="badge badge-xs border border-cyan-400/60 bg-cyan-950/60 text-cyan-300 font-semibold"
+                class="tooltip tooltip-left tooltip-primary max-w-xs"
+                data-tip="🔥 破圈推荐：探索认知边界。这篇内容在你的日常阅读画像之外，但近期展现出极高的讨论价值。偶尔跳出信息茧房，遇见未知的精彩。"
               >
-                ⚡ 破圈
-              </span>
+                <span class="badge badge-xs border border-cyan-400/80 bg-cyan-950/80 text-cyan-300 font-semibold shadow-[0_0_8px_rgba(34,211,238,0.4)] transition-all hover:scale-105">
+                  <span class="mr-1">⚡</span> 破圈
+                </span>
+              </div>
             </div>
 
             <%!-- 标题 --%>
