@@ -92,41 +92,41 @@ defmodule Insight.News do
   end
 
   @doc """
-  获取最近一次快照中的新闻条目列表，返回 LiveView 兼容的分页结果（含 tags preload）。
+  获取最近一次快照中的新闻条目列表，返回 LiveView 兼容的结果（含 tags preload）。
+  展示该快照中的全部新闻（按 rank 排序），支持按标签和搜索过滤。
 
   ## 参数
   - `source_type`: "news" 或 "newest"
   - `opts`: 可选参数
-    - `:page` — 页码（默认 1）
-    - `:per_page` — 每页条数（默认 30）
     - `:tag_id` — 按标签 ID 筛选
     - `:search` — 按标题搜索
-    - `:user_id` — 用户 ID（用于过滤屏蔽内容）
+    - `:user_id` — 用户 ID（预留）
   """
   def list_snapshot_news(source_type, opts \\ []) do
-    page = Keyword.get(opts, :page, 1)
-    per_page = Keyword.get(opts, :per_page, 30)
     tag_id = Keyword.get(opts, :tag_id)
     search = Keyword.get(opts, :search)
-    user_id = Keyword.get(opts, :user_id)
+    _user_id = Keyword.get(opts, :user_id)
 
     case get_latest_snapshot(source_type) do
       nil ->
-        %{items: [], total: 0, page: page, per_page: per_page, total_pages: 1}
+        %{items: [], total: 0, page: 1, per_page: 0, total_pages: 1}
 
       snapshot ->
         base_query =
-          CrawlSnapshotItem
-          |> where([csi], csi.crawl_snapshot_id == ^snapshot.id)
-          |> join(:inner, [csi], n in NewsItem, on: csi.news_item_id == n.id)
-          |> order_by([csi], asc: csi.rank)
+          from csi in CrawlSnapshotItem,
+            join: n in NewsItem,
+            on: csi.news_item_id == n.id,
+            where: csi.crawl_snapshot_id == ^snapshot.id,
+            order_by: [asc: csi.rank],
+            select: n
 
         # 按标签筛选
         base_query =
           if tag_id do
-            base_query
-            |> join(:inner, [csi, n], nt in "news_tags", on: nt.news_item_id == n.id)
-            |> where([csi, n, nt], nt.tag_id == ^tag_id)
+            from [csi, n] in base_query,
+              join: nt in "news_tags",
+              on: nt.news_item_id == n.id,
+              where: nt.tag_id == ^tag_id
           else
             base_query
           end
@@ -136,30 +136,16 @@ defmodule Insight.News do
           if search && search != "" do
             search_term = "%#{search}%"
 
-            from([csi, n] in base_query,
+            from [csi, n] in base_query,
               where: like(n.title, ^search_term) or like(n.title_zh, ^search_term)
-            )
           else
             base_query
           end
 
-        total = Repo.aggregate(base_query, :count)
+        items = Repo.all(base_query) |> Repo.preload(:tags)
+        total = length(items)
 
-        items =
-          base_query
-          |> offset(^((page - 1) * per_page))
-          |> limit(^per_page)
-          |> select([csi, n], n)
-          |> Repo.all()
-          |> Repo.preload(:tags)
-
-        %{
-          items: items,
-          total: total,
-          page: page,
-          per_page: per_page,
-          total_pages: max(ceil(total / per_page), 1)
-        }
+        %{items: items, total: total, page: 1, per_page: total, total_pages: 1}
     end
   end
 

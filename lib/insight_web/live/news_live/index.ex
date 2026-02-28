@@ -50,13 +50,7 @@ defmodule InsightWeb.NewsLive.Index do
         feed = Feeds.get_custom_feed!(feed_id)
         Feeds.query_feed(feed, page: page, per_page: @per_page)
       else
-        News.list_snapshot_news(source_type,
-          page: page,
-          per_page: @per_page,
-          tag_id: tag_id,
-          search: search,
-          user_id: user_id
-        )
+        News.list_snapshot_news(source_type, tag_id: tag_id, search: search, user_id: user_id)
       end
 
     news_ids = Enum.map(result.items, & &1.id)
@@ -348,7 +342,7 @@ defmodule InsightWeb.NewsLive.Index do
         <div
           :for={
             {item, idx} <-
-              Enum.with_index(@news_result.items, (@news_result.page - 1) * @news_result.per_page + 1)
+              Enum.with_index(@news_result.items, 1)
           }
           class={"card border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 #{
             if(Map.get(item, :is_serendipity),
