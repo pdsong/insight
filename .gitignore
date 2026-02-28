@@ -43,3 +43,6 @@ npm-debug.log
 
 # Documents
 project.md
+
+# Environment variables (API keys)
+.env
