@@ -54,6 +54,7 @@ defmodule InsightWeb.Router do
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
       live "/tags", TagLive.Index, :index
       live "/blocked", BlockedLive.Index, :index
+      live "/bookmarks", BookmarkLive.Index, :index
       live "/feeds", FeedLive.Index, :index
       live "/daily-summaries", UserLive.DailySummary, :index
       live "/radar", UserLive.Radar, :index

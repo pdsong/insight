@@ -142,4 +142,28 @@ defmodule Insight.InteractionsTest do
       assert Interactions.read?(user.id, news1.id)
     end
   end
+
+  describe "list_bookmarks_and_likes/2" do
+    test "返回正确分页的 bookmark 和 like 记录", %{user: user, news1: news1, news2: news2} do
+      Interactions.toggle_interaction(user.id, news1.id, "bookmark")
+      Interactions.toggle_like_dislike(user.id, news2.id, "like")
+
+      Interactions.create_interaction(%{user_id: user.id, news_item_id: news1.id, action: "read"})
+
+      result = Interactions.list_bookmarks_and_likes(user.id, page: 1, per_page: 10)
+
+      assert result.total == 2
+      assert result.total_pages == 1
+      assert length(result.items) == 2
+
+      assert hd(result.items).action == "like"
+      assert hd(result.items).news_item_id == news2.id
+    end
+
+    test "无记录时返回空", %{user: user} do
+      result = Interactions.list_bookmarks_and_likes(user.id, page: 1, per_page: 10)
+      assert result.total == 0
+      assert result.items == []
+    end
+  end
 end

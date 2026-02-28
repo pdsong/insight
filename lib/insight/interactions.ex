@@ -63,6 +63,39 @@ defmodule Insight.Interactions do
     |> Repo.all()
   end
 
+  @doc """
+  查询用户的收藏和喜欢记录（带分页）。
+  返回 %{items: [...], page: page, total_pages: total_pages, total: total}
+  """
+  def list_bookmarks_and_likes(user_id, opts \\ []) do
+    page = Keyword.get(opts, :page, 1)
+    per_page = Keyword.get(opts, :per_page, 20)
+    offset = (page - 1) * per_page
+
+    base_query =
+      UserInteraction
+      |> where([i], i.user_id == ^user_id and i.action in ["like", "bookmark"])
+
+    total = Repo.aggregate(base_query, :count, :id)
+    total_pages = ceil(total / per_page)
+    total_pages = if total_pages == 0, do: 1, else: total_pages
+
+    items =
+      base_query
+      |> order_by([i], desc: i.inserted_at)
+      |> limit(^per_page)
+      |> offset(^offset)
+      |> preload(:news_item)
+      |> Repo.all()
+
+    %{
+      items: items,
+      page: page,
+      total_pages: total_pages,
+      total: total
+    }
+  end
+
   @doc "批量查询用户对一组新闻的交互状态，返回 %{news_item_id => MapSet<action>}"
   def list_interactions_for_news_ids(user_id, news_item_ids) when is_list(news_item_ids) do
     if user_id == nil || news_item_ids == [] do

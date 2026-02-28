@@ -1,0 +1,97 @@
+<div class="space-y-6 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+  <%!-- 页面标题 --%>
+  <div class="text-center py-6">
+    <h1 class="text-4xl font-black tracking-wider bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent drop-shadow-sm select-none" style="font-family: 'Inter', 'Outfit', system-ui, sans-serif;">
+      我的足迹
+    </h1>
+    <p class="text-sm opacity-50 mt-2 tracking-widest font-mono uppercase">
+      Bookmarks & Likes · 共 {@interactions_result.total} 条
+    </p>
+  </div>
+
+  <%!-- 时间轴主体 --%>
+  <div class="relative border-l-2 border-base-300 ml-3 md:ml-6 mt-8">
+    <div :for={interaction <- @interactions_result.items} class="mb-10 ml-6 relative group">
+      <%!-- 时间轴节点圆点 --%>
+      <span class={"absolute w-4 h-4 rounded-full -left-[1.95rem] top-1.5 ring-4 ring-base-100 #{if interaction.action == "bookmark", do: "bg-amber-400", else: "bg-red-400"}"}></span>
+      
+      <%!-- 交互动作的描述（小号字体，日期前缀） --%>
+      <div class="mb-2">
+        <time class="mb-1 text-sm font-normal leading-none opacity-40 font-mono">
+          {Calendar.strftime(interaction.inserted_at, "%Y-%m-%d %H:%M")}
+        </time>
+        <span class={"ml-2 text-xs badge badge-sm #{if interaction.action == "bookmark", do: "badge-warning", else: "badge-error"}"}>
+          <%= if interaction.action == "bookmark" do %>
+            <.icon name="hero-bookmark-solid" class="size-3 mr-1" /> 收藏
+          <% else %>
+            <.icon name="hero-heart-solid" class="size-3 mr-1" /> 喜欢
+          <% end %>
+        </span>
+      </div>
+
+      <%!-- 关联的新闻内容卡片 --%>
+      <div class="card bg-base-100 border border-base-200 shadow-sm hover:shadow-md transition-shadow">
+        <div class="card-body p-4 lg:p-5 flex flex-col gap-2">
+          
+          <a href={interaction.news_item.url || "https://news.ycombinator.com/item?id=#{interaction.news_item.up_id}"}
+             target="_blank" rel="noopener"
+             class="font-medium text-base leading-snug hover:text-primary transition-colors line-clamp-2">
+            {interaction.news_item.title_zh || interaction.news_item.title}
+          </a>
+
+          <p :if={interaction.news_item.title_zh && interaction.news_item.title_zh != ""} 
+             class="text-sm opacity-40 line-clamp-1 -mt-1">
+            {interaction.news_item.title}
+          </p>
+
+          <div class="flex items-center justify-between border-t border-base-200 pt-3 mt-1">
+            <div class="flex items-center gap-2 text-xs opacity-50">
+              <span :if={interaction.news_item.domain} class="truncate max-w-[150px]">{interaction.news_item.domain}</span>
+              <span>·</span>
+              <a href={"https://news.ycombinator.com/item?id=#{interaction.news_item.up_id}"}
+                 target="_blank" rel="noopener"
+                 class="hover:text-primary transition-colors">
+                HN Original
+              </a>
+            </div>
+
+            <div class="flex items-center gap-1">
+              <%!-- 提供直接在此处取消操作的按钮 --%>
+              <button phx-click={if interaction.action == "bookmark", do: "toggle_bookmark", else: "toggle_reaction"} 
+                      phx-value-news-id={interaction.news_item.id} 
+                      phx-value-action={interaction.action}
+                      class="btn btn-xs btn-ghost text-error opacity-60 hover:opacity-100"
+                      title="移除记录">
+                移除
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <%!-- 空状态 --%>
+  <div :if={@interactions_result.items == []} class="text-center py-16 opacity-40">
+    <.icon name="hero-archive-box-x-mark" class="size-12 mx-auto mb-4" />
+    <p class="text-lg">暂无足迹</p>
+    <p class="text-sm mt-1">你的收藏和点赞将显示在这里</p>
+  </div>
+
+  <%!-- 分页 --%>
+  <div :if={@interactions_result.total_pages > 1} class="flex justify-center gap-2 pt-8 pb-12">
+    <button :if={@page > 1}
+            phx-click="goto_page" phx-value-page={@page - 1}
+            class="btn btn-sm btn-ghost">
+      ← 上一页
+    </button>
+    <span class="btn btn-sm btn-disabled">
+      {@page} / {@interactions_result.total_pages}
+    </span>
+    <button :if={@page < @interactions_result.total_pages}
+            phx-click="goto_page" phx-value-page={@page + 1}
+            class="btn btn-sm btn-ghost">
+      下一页 →
+    </button>
+  </div>
+</div>
