@@ -1,8 +1,8 @@
 defmodule Insight.AI.Summarizer do
   @moduledoc """
-  AI 中文翻译与摘要生成模块。
+  AI 中文翻译模块。
 
-  对英文新闻标题进行中文翻译（`title_zh`），并生成 50-100 字的中文摘要（`summary_zh`）。
+  对英文新闻标题进行中文翻译（`title_zh`）。
   与爬虫流程集成，可在入库后批量处理。
   """
   require Logger
@@ -10,16 +10,16 @@ defmodule Insight.AI.Summarizer do
   alias Insight.News
 
   @doc """
-  对一条新闻进行标题翻译和摘要生成。
+  对一条新闻进行标题翻译。
 
-  返回 `{:ok, %{title_zh: "...", summary_zh: "..."}}` 或 `{:error, reason}`
+  返回 `{:ok, %{title_zh: "...", summary_zh: nil}}` 或 `{:error, reason}`
   """
-  def translate_and_summarize(title, url, domain \\ nil) do
-    prompt = build_prompt(title, url, domain)
+  def translate_and_summarize(title, _url, _domain \\ nil) do
+    prompt = build_prompt(title)
 
-    case AI.ask_json(prompt, system: system_prompt(), temperature: 0.3, max_tokens: 512) do
-      {:ok, %{"title_zh" => title_zh, "summary_zh" => summary_zh}} ->
-        {:ok, %{title_zh: title_zh, summary_zh: summary_zh}}
+    case AI.ask_json(prompt, system: system_prompt(), temperature: 0.3, max_tokens: 256) do
+      {:ok, %{"title_zh" => title_zh}} ->
+        {:ok, %{title_zh: title_zh, summary_zh: nil}}
 
       {:ok, data} ->
         Logger.warning("AI 翻译返回格式异常: #{inspect(data)}")
@@ -60,9 +60,7 @@ defmodule Insight.AI.Summarizer do
 
   defp system_prompt do
     """
-    你是一个专业的科技新闻翻译助手。你的任务是：
-    1. 将英文新闻标题翻译为自然流畅的中文
-    2. 根据标题和 URL 推测新闻内容，生成 50-100 字的中文摘要
+    你是一个专业的科技新闻翻译助手。你的任务是将英文新闻标题翻译为自然流畅的中文。
 
     翻译要求：
     - 保留技术术语的英文原文（如 LLM、API、WASM 等通用缩写）
@@ -73,17 +71,14 @@ defmodule Insight.AI.Summarizer do
     """
   end
 
-  defp build_prompt(title, url, domain) do
-    domain_info = if domain, do: "域名: #{domain}\n", else: ""
-
+  defp build_prompt(title) do
     """
-    请翻译以下新闻标题并生成中文摘要。
+    请翻译以下英文新闻标题为中文。
 
     标题: #{title}
-    URL: #{url || "无"}
-    #{domain_info}
+
     请严格按以下 JSON 格式返回：
-    {"title_zh": "中文标题", "summary_zh": "50-100字的中文摘要，概述新闻要点"}
+    {"title_zh": "中文标题"}
     """
   end
 end
