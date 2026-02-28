@@ -177,7 +177,7 @@ defmodule InsightWeb.NewsLive.Index do
       Interactions.toggle_like_dislike(user_id, news_id, action)
 
       # 异步更新兴趣画像
-      Task.start(fn -> Interactions.calculate_all_user_interest_profiles(user_id) end)
+      Interactions.calculate_all_user_interest_profiles_async(user_id)
 
       {:noreply, refresh_interactions(socket, user_id, [news_id])}
     else
@@ -194,7 +194,7 @@ defmodule InsightWeb.NewsLive.Index do
       Interactions.toggle_interaction(user_id, news_id, "bookmark")
 
       # 异步更新兴趣画像
-      Task.start(fn -> Interactions.calculate_all_user_interest_profiles(user_id) end)
+      Interactions.calculate_all_user_interest_profiles_async(user_id)
 
       {:noreply, refresh_interactions(socket, user_id, [news_id])}
     else
@@ -214,7 +214,7 @@ defmodule InsightWeb.NewsLive.Index do
       end
 
       # 异步更新兴趣画像（虽然 read 权重小，但也算隐式交互）
-      Task.start(fn -> Interactions.calculate_all_user_interest_profiles(user_id) end)
+      Interactions.calculate_all_user_interest_profiles_async(user_id)
 
       {:noreply, refresh_interactions(socket, user_id, [news_id])}
     else

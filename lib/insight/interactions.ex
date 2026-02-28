@@ -147,6 +147,17 @@ defmodule Insight.Interactions do
     |> Repo.all()
   end
 
+  @env_test Mix.env() == :test
+
+  @doc "异步更新兴趣画像（在测试环境中同步执行以防沙盒数据库死锁）"
+  def calculate_all_user_interest_profiles_async(user_id) do
+    if @env_test do
+      calculate_all_user_interest_profiles(user_id)
+    else
+      Task.start(fn -> calculate_all_user_interest_profiles(user_id) end)
+    end
+  end
+
   @doc "重新计算并更新某个用户的所有兴趣画像"
   def calculate_all_user_interest_profiles(user_id) do
     # 权重规则

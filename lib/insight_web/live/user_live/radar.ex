@@ -7,7 +7,7 @@ defmodule InsightWeb.UserLive.Radar do
 
   @impl true
   def mount(_params, _session, socket) do
-    user_id = socket.assigns.current_scope.user_id
+    user_id = socket.assigns.current_scope.user.id
 
     distribution = Stats.get_tag_distribution(user_id)
     achievements = Stats.get_user_achievements(user_id)

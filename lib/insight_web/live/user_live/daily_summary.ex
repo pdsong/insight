@@ -7,7 +7,7 @@ defmodule InsightWeb.UserLive.DailySummary do
 
   @impl true
   def mount(_params, _session, socket) do
-    user_id = socket.assigns.current_scope.user_id
+    user_id = socket.assigns.current_scope.user.id
     summaries = News.list_daily_summaries(user_id)
 
     selected_summary = List.first(summaries)
@@ -23,7 +23,7 @@ defmodule InsightWeb.UserLive.DailySummary do
 
   @impl true
   def handle_params(%{"date" => date_str}, _uri, socket) do
-    user_id = socket.assigns.current_scope.user_id
+    user_id = socket.assigns.current_scope.user.id
 
     case Date.from_iso8601(date_str) do
       {:ok, date} ->
@@ -44,8 +44,7 @@ defmodule InsightWeb.UserLive.DailySummary do
       <%!-- 侧边栏：历史记录 --%>
       <div class="w-full md:w-64 shrink-0 border-b md:border-b-0 md:border-r border-base-300 pb-6 md:pb-0 md:pr-4">
         <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
-          <.icon name="hero-calendar-days" class="size-5 text-primary" />
-          日报历史
+          <.icon name="hero-calendar-days" class="size-5 text-primary" /> 日报历史
         </h2>
 
         <div class="space-y-2 max-h-48 md:max-h-[calc(100vh-12rem)] overflow-y-auto">
@@ -55,7 +54,7 @@ defmodule InsightWeb.UserLive.DailySummary do
 
           <.link
             :for={summary <- @summaries}
-            patch={~p"/daily-summaries?date=#{summary.date}"}
+            patch={~p"/daily-summaries?date=#{Date.to_string(summary.date)}"}
             class={"block p-3 rounded-lg transition-colors border " <> if @selected_summary && @selected_summary.id == summary.id, do: "bg-primary/5 text-primary border-primary/20 font-medium", else: "border-transparent hover:bg-base-200"}
           >
             <div class="flex items-center justify-between">
@@ -71,7 +70,10 @@ defmodule InsightWeb.UserLive.DailySummary do
 
       <%!-- 主内容区：简报正文 --%>
       <div class="flex-1 min-w-0">
-        <div :if={@selected_summary} class="bg-base-100 p-6 md:p-8 rounded-2xl shadow-sm border border-base-200 min-h-[500px]">
+        <div
+          :if={@selected_summary}
+          class="bg-base-100 p-6 md:p-8 rounded-2xl shadow-sm border border-base-200 min-h-[500px]"
+        >
           <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-6 border-b border-base-200 gap-4">
             <div class="flex items-center gap-4">
               <div class="p-3 bg-primary/10 rounded-xl">
@@ -93,23 +95,20 @@ defmodule InsightWeb.UserLive.DailySummary do
           <%= case @selected_summary.status do %>
             <% "completed" -> %>
               <div class="prose prose-sm md:prose-base max-w-none prose-a:text-primary hover:prose-a:text-primary-focus prose-headings:font-bold prose-h2:border-b-2 prose-h2:border-base-200 prose-h2:pb-2">
-                {raw Earmark.as_html!(@selected_summary.content || "")}
+                {raw(Earmark.as_html!(@selected_summary.content || ""))}
               </div>
-
             <% "generating" -> %>
               <div class="flex flex-col items-center justify-center py-20 opacity-60">
                 <span class="loading loading-spinner loading-lg mb-6 text-primary"></span>
                 <p class="text-lg font-medium">简报正在由 AI 生成中</p>
                 <p class="text-sm mt-2">请稍等片刻，或稍后刷新页面查看...</p>
               </div>
-
             <% "failed" -> %>
               <div class="flex flex-col items-center justify-center py-20 text-error/80">
                 <.icon name="hero-exclamation-triangle" class="size-16 mb-4" />
                 <p class="text-lg font-medium">简报生成失败</p>
                 <p class="text-sm mt-2 opacity-80">可能由于网络问题或内容过长，请明天再来看看。</p>
               </div>
-
             <% "pending" -> %>
               <div class="flex flex-col items-center justify-center py-20 opacity-50">
                 <.icon name="hero-clock" class="size-16 mb-4" />
@@ -118,7 +117,10 @@ defmodule InsightWeb.UserLive.DailySummary do
           <% end %>
         </div>
 
-        <div :if={is_nil(@selected_summary)} class="flex flex-col items-center justify-center h-full min-h-[500px] opacity-30 bg-base-200/30 rounded-2xl border border-dashed border-base-300">
+        <div
+          :if={is_nil(@selected_summary)}
+          class="flex flex-col items-center justify-center h-full min-h-[500px] opacity-30 bg-base-200/30 rounded-2xl border border-dashed border-base-300"
+        >
           <.icon name="hero-document-text" class="size-20 mb-6" />
           <p class="text-xl font-medium">选择左侧日期查看您的专属简报</p>
         </div>
