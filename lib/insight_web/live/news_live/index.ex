@@ -23,7 +23,7 @@ defmodule InsightWeb.NewsLive.Index do
       |> assign(:page_title, "新闻")
       |> assign(:tags, tags)
       |> assign(:selected_tag_id, nil)
-      |> assign(:source_type, nil)
+      |> assign(:source_type, "newest")
       |> assign(:search, "")
       |> assign(:page, 1)
       |> assign(:interactions, %{})
