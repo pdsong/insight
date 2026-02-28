@@ -10,8 +10,9 @@ defmodule Insight.Scraper.Worker do
   alias Insight.News
   alias Insight.Scraper.HN
 
-  # 北京时间 9:00, 12:00, 18:00, 21:00 对应 UTC 的 1, 4, 10, 13
-  @target_utc_hours [1, 4, 10, 13]
+  # 北京时间 6:00, 12:00, 18:00 对应 UTC 的 22 (前一天), 4, 10
+  # 排好序的集合以便 Enum.find 时按自然顺位检查
+  @target_utc_hours [4, 10, 22]
 
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
