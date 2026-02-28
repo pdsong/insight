@@ -115,7 +115,7 @@ defmodule InsightWeb.TagLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="space-y-8">
+    <div class="max-w-5xl mx-auto py-8 px-4 space-y-8">
       <div>
         <h1 class="text-2xl font-bold tracking-tight">标签管理</h1>
         <p class="text-sm opacity-60 mt-1">管理系统标签和你的自定义标签</p>
