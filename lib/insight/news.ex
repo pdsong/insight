@@ -105,7 +105,7 @@ defmodule Insight.News do
   def list_snapshot_news(source_type, opts \\ []) do
     tag_id = Keyword.get(opts, :tag_id)
     search = Keyword.get(opts, :search)
-    _user_id = Keyword.get(opts, :user_id)
+    user_id = Keyword.get(opts, :user_id)
 
     case get_latest_snapshot(source_type) do
       nil ->
@@ -113,8 +113,8 @@ defmodule Insight.News do
 
       snapshot ->
         base_query =
-          from csi in CrawlSnapshotItem,
-            join: n in NewsItem,
+          from n in NewsItem,
+            join: csi in CrawlSnapshotItem,
             on: csi.news_item_id == n.id,
             where: csi.crawl_snapshot_id == ^snapshot.id,
             order_by: [asc: csi.rank],
@@ -123,7 +123,7 @@ defmodule Insight.News do
         # 按标签筛选
         base_query =
           if tag_id do
-            from [csi, n] in base_query,
+            from [n, csi] in base_query,
               join: nt in "news_tags",
               on: nt.news_item_id == n.id,
               where: nt.tag_id == ^tag_id
@@ -136,11 +136,14 @@ defmodule Insight.News do
           if search && search != "" do
             search_term = "%#{search}%"
 
-            from [csi, n] in base_query,
+            from [n, csi] in base_query,
               where: like(n.title, ^search_term) or like(n.title_zh, ^search_term)
           else
             base_query
           end
+
+        # 过滤屏蔽内容
+        base_query = apply_blocking_filters(base_query, user_id)
 
         items = Repo.all(base_query) |> Repo.preload(:tags)
         total = length(items)
