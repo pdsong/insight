@@ -38,7 +38,13 @@
   </head>
   <body class="font-sans antialiased">
     <%!-- 顶部导航栏：根据登录状态显示不同菜单 --%>
-    <ul class="menu menu-horizontal w-full relative z-10 flex items-center gap-4 px-4 sm:px-6 lg:px-8 justify-end">
+    <ul class="menu menu-horizontal w-full relative z-10 flex items-center gap-4 px-4 sm:px-6 lg:px-8">
+      <li class="mr-auto">
+        <a href="/" class="flex items-center gap-2">
+          <span class="text-xl font-bold tracking-tight">Insight</span>
+          <span class="text-xs opacity-50 font-medium">智能阅读</span>
+        </a>
+      </li>
       <%= if @current_scope do %>
         <li class="text-sm opacity-70">
           {@current_scope.user.email}
