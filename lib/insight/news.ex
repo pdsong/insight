@@ -92,28 +92,46 @@ defmodule Insight.News do
   end
 
   @doc """
-  获取最近一次快照中的新闻条目列表，返回 LiveView 兼容的结果（含 tags preload）。
+  获取最近一次快照中的新闻条目列表，返回 LiveView 兼容的分页结果（含 tags preload）。
 
-  返回格式:
-  %{items: [%NewsItem{} ...], total: integer, page: 1, per_page: total, total_pages: 1}
+  ## 参数
+  - `source_type`: "news" 或 "newest"
+  - `opts`: 可选参数
+    - `:page` — 页码（默认 1）
+    - `:per_page` — 每页条数（默认 30）
   """
-  def list_snapshot_news(source_type) do
+  def list_snapshot_news(source_type, opts \\ []) do
+    page = Keyword.get(opts, :page, 1)
+    per_page = Keyword.get(opts, :per_page, 30)
+
     case get_latest_snapshot(source_type) do
       nil ->
-        %{items: [], total: 0, page: 1, per_page: 0, total_pages: 1}
+        %{items: [], total: 0, page: page, per_page: per_page, total_pages: 1}
 
       snapshot ->
-        items =
+        base_query =
           CrawlSnapshotItem
           |> where([csi], csi.crawl_snapshot_id == ^snapshot.id)
           |> join(:inner, [csi], n in NewsItem, on: csi.news_item_id == n.id)
           |> order_by([csi], asc: csi.rank)
+
+        total = Repo.aggregate(base_query, :count)
+
+        items =
+          base_query
+          |> offset(^((page - 1) * per_page))
+          |> limit(^per_page)
           |> select([csi, n], n)
           |> Repo.all()
           |> Repo.preload(:tags)
 
-        total = length(items)
-        %{items: items, total: total, page: 1, per_page: total, total_pages: 1}
+        %{
+          items: items,
+          total: total,
+          page: page,
+          per_page: per_page,
+          total_pages: max(ceil(total / per_page), 1)
+        }
     end
   end
 

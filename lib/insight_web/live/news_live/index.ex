@@ -50,7 +50,7 @@ defmodule InsightWeb.NewsLive.Index do
         feed = Feeds.get_custom_feed!(feed_id)
         Feeds.query_feed(feed, page: page, per_page: @per_page)
       else
-        News.list_snapshot_news(source_type)
+        News.list_snapshot_news(source_type, page: page, per_page: @per_page)
       end
 
     news_ids = Enum.map(result.items, & &1.id)
@@ -337,165 +337,147 @@ defmodule InsightWeb.NewsLive.Index do
         </button>
       </div>
 
-      <%!-- 新闻列表 --%>
-      <div class="space-y-3">
+      <%!-- 新闻卡片网格 --%>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
         <div
-          :for={item <- @news_result.items}
-          class={"card transition-colors duration-200 cursor-default #{
+          :for={
+            {item, idx} <-
+              Enum.with_index(@news_result.items, (@news_result.page - 1) * @news_result.per_page + 1)
+          }
+          class={"card border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 #{
             if(Map.get(item, :is_serendipity),
-              do: "bg-gradient-to-r from-purple-100/50 to-pink-100/50 border border-purple-200 hover:from-purple-200/50 hover:to-pink-200/50 shadow-sm",
-              else: "bg-base-200/50 hover:bg-base-200"
+              do: "bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200",
+              else: "bg-base-100 border-base-300"
             )
           } #{if read?(item.id, @interactions), do: "opacity-50", else: ""}"}
         >
-          <div class="card-body p-4 relative">
-            <%!-- 破圈标记 --%>
-            <div :if={Map.get(item, :is_serendipity)} class="absolute top-3 right-3">
-              <span class="badge badge-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 shadow-sm">
-                <.icon name="hero-sparkles-mini" class="size-3 mr-1" /> 破圈推荐
+          <div class="card-body p-3 flex flex-col gap-2">
+            <%!-- 序号 + 破圈标记 --%>
+            <div class="flex items-center justify-between">
+              <span class="badge badge-sm badge-primary font-mono font-bold">{idx}</span>
+              <span
+                :if={Map.get(item, :is_serendipity)}
+                class="badge badge-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0"
+              >
+                ✨ 破圈
               </span>
             </div>
 
-            <div class="flex items-start gap-3">
-              <%!-- Like/Dislike 按钮 --%>
-              <div class="flex flex-col items-center gap-1 pt-0.5 shrink-0">
+            <%!-- 标题 --%>
+            <a
+              href={item.url || "https://news.ycombinator.com/item?id=#{item.up_id}"}
+              target="_blank"
+              rel="noopener"
+              class="font-medium text-sm leading-snug hover:text-primary transition-colors line-clamp-3"
+              phx-click="mark_read"
+              phx-value-news-id={item.id}
+            >
+              {item.title_zh || item.title}
+            </a>
+
+            <%!-- 原标题 --%>
+            <p
+              :if={item.title_zh && item.title_zh != ""}
+              class="text-xs opacity-40 line-clamp-1 -mt-1"
+            >
+              {item.title}
+            </p>
+
+            <%!-- AI 推荐理由 --%>
+            <div
+              :if={@ai_reasons[item.id]}
+              class="p-1.5 rounded bg-primary/5 border border-primary/10"
+            >
+              <p class="text-xs text-primary/80 line-clamp-2 leading-relaxed">
+                ✨ {@ai_reasons[item.id]}
+              </p>
+            </div>
+
+            <%!-- 弹性撑开 --%>
+            <div class="flex-1"></div>
+
+            <%!-- 元信息 --%>
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs opacity-50">
+              <span :if={item.domain} class="truncate max-w-[120px]">{item.domain}</span>
+              <a
+                href={"https://news.ycombinator.com/item?id=#{item.up_id}"}
+                target="_blank"
+                rel="noopener"
+                class="hover:text-primary transition-colors"
+              >
+                HN
+              </a>
+            </div>
+
+            <%!-- 标签 --%>
+            <div
+              :if={item.tags != [] && item.tags != %Ecto.Association.NotLoaded{}}
+              class="flex flex-wrap gap-1"
+            >
+              <span
+                :for={tag <- item.tags}
+                class="badge badge-xs badge-outline opacity-60"
+              >
+                {tag.name}
+              </span>
+            </div>
+
+            <%!-- 操作按钮 --%>
+            <div class="flex items-center justify-between border-t border-base-200 pt-2 -mb-1">
+              <div class="flex items-center gap-0.5">
                 <button
                   phx-click="toggle_reaction"
                   phx-value-news-id={item.id}
                   phx-value-action="like"
-                  class={"btn btn-xs btn-circle transition-all duration-200 #{if liked?(item.id, @interactions), do: "btn-success text-success-content scale-110", else: "btn-ghost opacity-50 hover:opacity-100"}"}
+                  class={"btn btn-xs btn-circle btn-ghost #{if liked?(item.id, @interactions), do: "text-success", else: "opacity-40 hover:opacity-80"}"}
                   title="喜欢"
                 >
-                  <.icon name="hero-hand-thumb-up-mini" class="size-3.5" />
+                  <.icon name="hero-hand-thumb-up-mini" class="size-3" />
                 </button>
                 <button
                   phx-click="toggle_reaction"
                   phx-value-news-id={item.id}
                   phx-value-action="dislike"
-                  class={"btn btn-xs btn-circle transition-all duration-200 #{if disliked?(item.id, @interactions), do: "btn-error text-error-content scale-110", else: "btn-ghost opacity-50 hover:opacity-100"}"}
+                  class={"btn btn-xs btn-circle btn-ghost #{if disliked?(item.id, @interactions), do: "text-error", else: "opacity-40 hover:opacity-80"}"}
                   title="不喜欢"
                 >
-                  <.icon name="hero-hand-thumb-down-mini" class="size-3.5" />
+                  <.icon name="hero-hand-thumb-down-mini" class="size-3" />
                 </button>
               </div>
-
-              <%!-- 主内容 --%>
-              <div class="flex-1 min-w-0">
-                <a
-                  href={item.url || "https://news.ycombinator.com/item?id=#{item.up_id}"}
-                  target="_blank"
-                  rel="noopener"
-                  class="font-medium hover:text-primary transition-colors line-clamp-2 text-sm"
+              <div class="flex items-center gap-0.5">
+                <button
+                  phx-click="toggle_bookmark"
+                  phx-value-news-id={item.id}
+                  class={"btn btn-xs btn-circle btn-ghost #{if bookmarked?(item.id, @interactions), do: "text-warning", else: "opacity-40 hover:opacity-80"}"}
+                  title={if bookmarked?(item.id, @interactions), do: "取消收藏", else: "收藏"}
                 >
-                  {item.title_zh || item.title}
-                </a>
-
-                <%!-- 原标题 --%>
-                <p
-                  :if={item.title_zh && item.title_zh != ""}
-                  class="text-xs opacity-40 mt-0.5 line-clamp-1"
+                  <.icon
+                    name={
+                      if bookmarked?(item.id, @interactions),
+                        do: "hero-bookmark-solid",
+                        else: "hero-bookmark"
+                    }
+                    class="size-3"
+                  />
+                </button>
+                <span
+                  :if={read?(item.id, @interactions)}
+                  class="opacity-30"
+                  title="已读"
                 >
-                  {item.title}
-                </p>
-
-                <%!-- 摘要 --%>
-                <p
-                  :if={item.summary_zh && item.summary_zh != ""}
-                  class="text-xs opacity-60 mt-1.5 line-clamp-2"
-                >
-                  {item.summary_zh}
-                </p>
-
-                <%!-- AI 推荐理由 --%>
-                <div
-                  :if={@ai_reasons[item.id]}
-                  class="mt-2.5 p-2 rounded-md bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 flex items-start gap-2"
-                >
-                  <.icon name="hero-sparkles-solid" class="size-4 text-primary shrink-0 mt-0.5" />
-                  <p class="text-xs font-medium text-primary/90 leading-relaxed">
-                    {@ai_reasons[item.id]}
-                  </p>
-                </div>
-
-                <%!-- 元信息 --%>
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs opacity-50">
-                  <span :if={item.domain} class="flex items-center gap-1">
-                    <.icon name="hero-globe-alt-mini" class="size-3" />
-                    {item.domain}
-                  </span>
-                  <span :if={item.hn_user} class="flex items-center gap-1">
-                    <.icon name="hero-user-mini" class="size-3" />
-                    {item.hn_user}
-                  </span>
-                  <a
-                    href={"https://news.ycombinator.com/item?id=#{item.up_id}"}
-                    target="_blank"
-                    rel="noopener"
-                    class="flex items-center gap-1 hover:text-primary transition-colors"
-                  >
-                    <.icon name="hero-chat-bubble-left-mini" class="size-3" /> HN
-                  </a>
-                </div>
-
-                <%!-- 标签 --%>
-                <%!-- 标签 + 操作 --%>
-                <div class="flex items-center gap-2 mt-2">
-                  <div
-                    :if={item.tags != [] && item.tags != %Ecto.Association.NotLoaded{}}
-                    class="flex flex-wrap gap-1 flex-1"
-                  >
-                    <span
-                      :for={tag <- item.tags}
-                      class="badge badge-xs badge-outline opacity-60"
-                    >
-                      {tag.name}
-                    </span>
-                  </div>
-                  <div class="flex items-center gap-1 shrink-0">
-                    <button
-                      phx-click="toggle_bookmark"
-                      phx-value-news-id={item.id}
-                      class={"btn btn-xs btn-ghost transition-all duration-200 #{if bookmarked?(item.id, @interactions), do: "text-warning opacity-100", else: "opacity-40 hover:opacity-80"}"}
-                      title={if bookmarked?(item.id, @interactions), do: "取消收藏", else: "稍后再读"}
-                    >
-                      <.icon
-                        name={
-                          if bookmarked?(item.id, @interactions),
-                            do: "hero-bookmark-solid",
-                            else: "hero-bookmark"
-                        }
-                        class="size-3.5"
-                      />
-                    </button>
-                    <button
-                      :if={!read?(item.id, @interactions)}
-                      phx-click="mark_read"
-                      phx-value-news-id={item.id}
-                      class="btn btn-xs btn-ghost opacity-40 hover:opacity-80"
-                      title="标为已读"
-                    >
-                      <.icon name="hero-eye" class="size-3.5" />
-                    </button>
-                    <span
-                      :if={read?(item.id, @interactions)}
-                      class="text-xs opacity-30"
-                      title="已读"
-                    >
-                      <.icon name="hero-eye-slash" class="size-3.5" />
-                    </span>
-                  </div>
-                </div>
+                  <.icon name="hero-eye-slash" class="size-3" />
+                </span>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <%!-- 空状态 --%>
-        <div :if={@news_result.items == []} class="text-center py-16 opacity-40">
-          <.icon name="hero-inbox" class="size-12 mx-auto mb-4" />
-          <p class="text-lg">暂无新闻</p>
-          <p class="text-sm mt-1">爬虫尚未抓取数据，请运行 <code>mix insight.crawl</code></p>
-        </div>
+      <%!-- 空状态 --%>
+      <div :if={@news_result.items == []} class="text-center py-16 opacity-40">
+        <.icon name="hero-inbox" class="size-12 mx-auto mb-4" />
+        <p class="text-lg">暂无新闻</p>
+        <p class="text-sm mt-1">爬虫尚未抓取数据，请运行 <code>mix insight.crawl</code></p>
       </div>
 
       <%!-- 分页 --%>

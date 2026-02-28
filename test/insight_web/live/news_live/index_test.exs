@@ -116,7 +116,7 @@ defmodule InsightWeb.NewsLive.IndexTest do
         )
         |> render_click()
 
-      assert html =~ "btn-success"
+      assert html =~ "text-success"
     end
 
     test "点击收藏切换状态", %{conn: conn, news: news} do
@@ -135,7 +135,7 @@ defmodule InsightWeb.NewsLive.IndexTest do
 
       html =
         view
-        |> element(~s|button[phx-click=mark_read][phx-value-news-id="#{news.id}"]|)
+        |> element(~s|a[phx-click=mark_read][phx-value-news-id="#{news.id}"]|)
         |> render_click()
 
       assert html =~ "opacity-50"
