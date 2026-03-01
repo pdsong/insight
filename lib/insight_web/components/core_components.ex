@@ -495,4 +495,47 @@ defmodule InsightWeb.CoreComponents do
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
   end
+
+  @doc """
+  Generates a consistent Tailwind CSS color class string based on the given tag name.
+  Uses Erlang's phash2 to map the string to a predefined list of pleasant colors.
+  """
+  def tag_color_class(tag_name) when is_binary(tag_name) do
+    colors = [
+      # Neon / Bright Glow
+      "border-indigo-400 text-indigo-500 bg-indigo-400/10 shadow-[0_0_8px_rgba(99,102,241,0.2)]",
+      "border-cyan-400 text-cyan-600 bg-cyan-400/10 shadow-[0_0_8px_rgba(34,211,238,0.2)]",
+      "border-fuchsia-400 text-fuchsia-500 bg-fuchsia-400/10 shadow-[0_0_8px_rgba(232,121,249,0.2)]",
+      "border-emerald-400 text-emerald-600 bg-emerald-400/10 shadow-[0_0_8px_rgba(52,211,153,0.2)]",
+      "border-rose-400 text-rose-500 bg-rose-400/10 shadow-[0_0_8px_rgba(251,113,133,0.2)]",
+
+      # Dashed / Dotted Borders
+      "border-dashed border-amber-500 text-amber-600 bg-amber-500/10",
+      "border-dotted border-sky-400 text-sky-600 bg-sky-400/10",
+      "border-dashed border-pink-500 text-pink-600 bg-pink-500/10",
+      "border-dotted border-lime-500 text-lime-700 bg-lime-500/10",
+
+      # Soft Pastels (Light, high contrast text)
+      "border-transparent bg-violet-500/15 text-violet-700",
+      "border-transparent bg-teal-500/15 text-teal-700",
+      "border-transparent bg-orange-500/15 text-orange-700",
+
+      # Solid Bright (High Contrast text on solid bright bg)
+      "border-transparent bg-yellow-300 text-yellow-900 font-semibold",
+      "border-transparent bg-cyan-200 text-cyan-900 font-semibold",
+      "border-transparent bg-green-300 text-green-900 font-semibold",
+
+      # Gradients (Text & Subtle borders)
+      "border-purple-300 bg-gradient-to-r from-purple-500/15 to-pink-500/15 text-purple-700",
+      "border-blue-300 bg-gradient-to-r from-cyan-500/15 to-blue-500/15 text-blue-700",
+      "border-green-300 bg-gradient-to-r from-emerald-500/15 to-teal-500/15 text-emerald-700",
+      "border-amber-300 bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-amber-700",
+      "border-red-300 bg-gradient-to-r from-rose-500/15 to-red-500/15 text-red-700"
+    ]
+
+    index = :erlang.phash2(tag_name, length(colors))
+    Enum.at(colors, index)
+  end
+
+  def tag_color_class(_), do: "border-base-content/20 text-base-content/60"
 end

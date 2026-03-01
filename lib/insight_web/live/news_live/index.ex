@@ -328,7 +328,14 @@ defmodule InsightWeb.NewsLive.Index do
           :for={tag <- @tags}
           phx-click="filter_tag"
           phx-value-tag-id={tag.id}
-          class={"badge badge-lg cursor-pointer transition-all duration-200 hover:scale-105 font-medium #{if @selected_tag_id == tag.id, do: "badge-primary shadow-md shadow-primary/20", else: "badge-outline opacity-60 hover:opacity-100 hover:border-primary/40"}"}
+          class={[
+            "badge badge-lg cursor-pointer transition-all duration-200 hover:scale-105 font-medium",
+            if(@selected_tag_id == tag.id,
+              do: "badge-primary shadow-md shadow-primary/20",
+              else:
+                "badge-outline opacity-70 hover:opacity-100 #{InsightWeb.CoreComponents.tag_color_class(tag.name)}"
+            )
+          ]}
         >
           {tag.name}
         </button>
@@ -426,7 +433,10 @@ defmodule InsightWeb.NewsLive.Index do
             >
               <span
                 :for={tag <- item.tags}
-                class="badge badge-xs badge-outline opacity-60"
+                class={[
+                  "badge badge-xs badge-outline opacity-80",
+                  InsightWeb.CoreComponents.tag_color_class(tag.name)
+                ]}
               >
                 {tag.name}
               </span>
